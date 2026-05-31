@@ -11,7 +11,7 @@ export const PROVIDERS: ProviderDef[] = [
   {
     id: "kling-official",
     label: "可灵官方",
-    description: "api.klingai.com · AK/SK 鉴权",
+    description: "api-beijing.klingai.com · AK/SK 鉴权",
   },
   {
     id: "dashscope",

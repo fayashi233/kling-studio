@@ -96,4 +96,5 @@ function migrateSchema(db: Database.Database) {
   addColumnIfMissing("prompt_versions", "prompt_id", "TEXT DEFAULT ''");
   // Index for prompt_id lookups
   db.exec(`CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt_id ON prompt_versions(prompt_id)`);
+  addColumnIfMissing("generations", "task_type", "TEXT DEFAULT ''");
 }

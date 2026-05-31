@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import type { KlingParams, KlingImageParams, TaskResult } from "@/types";
 
-const BASE_URL = "https://api.klingai.com";
+const BASE_URL = "https://api-beijing.klingai.com";
 
 export function generateToken(accessKey: string, secretKey: string): string {
   const now = Math.floor(Date.now() / 1000);
@@ -57,8 +57,11 @@ export async function submitImage2Video(
 
 export async function getTaskStatus(
   token: string,
-  taskId: string
+  taskId: string,
+  taskType: string
 ): Promise<TaskResult> {
-  const data = await klingFetch(token, `/v1/videos/${taskId}`);
+  // New Kling API requires type-specific status endpoints
+  const type = taskType || "text2video";
+  const data = await klingFetch(token, `/v1/videos/${type}/${taskId}`);
   return data.data;
 }
