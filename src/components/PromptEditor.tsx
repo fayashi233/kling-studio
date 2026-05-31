@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppStore } from "@/stores/useAppStore";
-import { Sparkles, Wand2, Send, Copy, RotateCcw } from "lucide-react";
+import { Sparkles, Wand2, Send, Copy, RotateCcw, Plus } from "lucide-react";
 
 const QUICK_TAGS = [
   "cinematic lighting", "slow motion", "golden hour",
@@ -19,11 +19,13 @@ export function PromptEditor({
   onGenerateAndSwitch,
   onSave,
   onLLMAction,
+  onNewPrompt,
 }: {
   onGenerate: () => void;
   onGenerateAndSwitch: () => void;
   onSave: () => void;
   onLLMAction: (action: "expand" | "optimize" | "variants", lang: string) => void;
+  onNewPrompt?: () => void;
 }) {
   const { params, setParams, isGenerating, llmLoading, settings } = useAppStore();
   const isDashScope = settings.provider === "dashscope";
@@ -73,6 +75,15 @@ export function PromptEditor({
     <div className="flex flex-col gap-2">
       {/* Prompt */}
       <div className="relative">
+        {onNewPrompt && (
+          <button
+            className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 text-[10px] bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+            onClick={onNewPrompt}
+            title="新建提示词"
+          >
+            <Plus className="h-3 w-3" />新建
+          </button>
+        )}
         <Textarea
           placeholder="输入视频描述提示词..."
           className="min-h-[120px] resize-y text-sm leading-relaxed"

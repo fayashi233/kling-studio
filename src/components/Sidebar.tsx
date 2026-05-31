@@ -508,10 +508,11 @@ function PromptItem({
   onAssignGroup: (groupName: string) => void;
 }) {
   const showAssign = assignTarget === p.id;
+  const isActive = useAppStore((s) => s.currentPromptId) === p.id;
 
   return (
-    <div className="rounded border bg-card overflow-hidden">
-      <div className="p-1.5 hover:bg-accent/50 cursor-pointer transition-colors group"
+    <div className={`rounded border overflow-hidden ${isActive ? "bg-primary/10 border-primary" : "bg-card"}`}>
+      <div className={`p-1.5 hover:bg-accent/50 cursor-pointer transition-colors group ${isActive ? "bg-primary/5" : ""}`}
         onClick={onLoad}>
         <p className="text-[11px] line-clamp-2 leading-relaxed">{p.prompt}</p>
         <div className="flex items-center justify-between mt-0.5">
@@ -519,6 +520,11 @@ function PromptItem({
             <span className="text-[9px] text-muted-foreground">{p.model_name}</span>
             {p.group_name && (
               <Badge variant="outline" className="text-[8px] px-1 py-0 h-3">{p.group_name}</Badge>
+            )}
+            {p.version_count != null && p.version_count > 0 && (
+              <Badge variant="outline" className="text-[8px] px-1 py-0 h-3 text-orange-600 border-orange-300">
+                {p.version_count}版本
+              </Badge>
             )}
           </div>
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

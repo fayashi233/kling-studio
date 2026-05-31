@@ -54,6 +54,10 @@ interface AppState {
   settingsLoaded: boolean;
   setSettingsLoaded: (v: boolean) => void;
 
+  // Current prompt being edited (links to prompt library)
+  currentPromptId: string | null;
+  setCurrentPromptId: (id: string | null) => void;
+
   // LLM
   llmLoading: boolean;
   setLlmLoading: (v: boolean) => void;
@@ -113,6 +117,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   savedPrompts: [],
   setSavedPrompts: (prompts) => set({ savedPrompts: prompts }),
+
+  currentPromptId: null,
+  setCurrentPromptId: (id) => set({ currentPromptId: id }),
 
   settings: defaultSettings,
   setSettings: (update) =>

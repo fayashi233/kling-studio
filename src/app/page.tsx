@@ -68,6 +68,7 @@ export default function HomePage() {
     setCurrentTask, addToHistory, updateHistoryTask,
     setSavedPrompts, setImages, setSettings, setSettingsLoaded,
     llmLoading, setLlmLoading, setHistory, history,
+    currentPromptId, setCurrentPromptId,
   } = useAppStore();
 
   const pollingTasksRef = useRef<Set<string>>(new Set());
@@ -78,6 +79,8 @@ export default function HomePage() {
 
   // Load prompt and find associated video
   const handleLoadPrompt = useCallback((p: { id: string; prompt: string; negative_prompt: string; model_name: string; mode: string; duration: string; aspect_ratio: string; cfg_scale: number; reference_image: string | null }) => {
+    // Track which prompt we're editing
+    useAppStore.getState().setCurrentPromptId(p.id);
     // Load prompt params
     useAppStore.getState().setParams({
       prompt: p.prompt,
@@ -178,16 +181,22 @@ export default function HomePage() {
       const res = await fetch("/api/kling/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params, image: currentImage || undefined, parentId: currentVersionId }),
+        body: JSON.stringify({ params, image: currentImage || undefined, parentId: currentVersionId, promptId: currentPromptId }),
       });
       const data = await res.json();
       if (data.error) { alert(data.error); setIsGenerating(false); return; }
+      // If this is the first generation (no currentPromptId), bind to the newly created prompt
+      if (!currentPromptId && data.promptId) {
+        useAppStore.getState().setCurrentPromptId(data.promptId);
+      }
       const task = { id: data.generationId, promptId: data.promptId, taskId: data.taskId, status: "submitted" as const, startedAt: Date.now() };
       addToHistory(task);
       setCurrentTask(task);
       startPolling(data.taskId);
+      // 刷新侧边栏提示词列表（生成 API 已保存 prompt 到 DB）
+      fetch("/api/prompts").then(r => r.json()).then(setSavedPrompts).catch(() => {});
     } catch (err) { alert("提交失败: " + (err as Error).message); setIsGenerating(false); }
-  }, [params, currentImage, currentVersionId, setIsGenerating, addToHistory, setCurrentTask, startPolling]);
+  }, [params, currentImage, currentVersionId, currentPromptId, setIsGenerating, addToHistory, setCurrentTask, startPolling, setSavedPrompts]);
 
   // ── Batch ──
   const handleBatchGenerate = useCallback(
@@ -285,7 +294,7 @@ export default function HomePage() {
               </span>
             </div>
           )}
-          <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
+<Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
             onClick={() => fetch("/api/videos/open", { method: "POST" }).catch(() => {})}>
             <FolderOpen className="h-3 w-3 mr-1" />视频文件夹
           </Button>
@@ -321,6 +330,40 @@ export default function HomePage() {
               onGenerateAndSwitch={handleGenerateAndSwitch}
               onSave={handleSavePrompt}
               onLLMAction={handleLLMAction}
+              onNewPrompt={async () => {
+                // 如果当前提示词不为空，先保存到提示词库
+                if (params.prompt.trim()) {
+                  await fetch("/api/prompts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      prompt: params.prompt,
+                      negative_prompt: params.negative_prompt,
+                      model_name: params.model_name,
+                      mode: params.mode,
+                      duration: params.duration,
+                      aspect_ratio: params.aspect_ratio,
+                      cfg_scale: params.cfg_scale,
+                      reference_image: currentImage || null,
+                      group_name: activeGroup || "",
+                    }),
+                  });
+                  // 刷新侧边栏提示词列表
+                  const promptsRes = await fetch("/api/prompts");
+                  setSavedPrompts(await promptsRes.json());
+                }
+                // 清空表单（保留模型设置）
+                useAppStore.getState().setCurrentPromptId(null);
+                useAppStore.getState().setParams({
+                  prompt: "", negative_prompt: "",
+                  model_name: params.model_name, mode: params.mode,
+                  duration: params.duration, aspect_ratio: params.aspect_ratio,
+                  cfg_scale: params.cfg_scale,
+                });
+                useAppStore.getState().setCurrentImage(null);
+                useAppStore.getState().setCurrentTask(null);
+                setCurrentVersionId(null);
+              }}
             />
           </div>
           <div className="flex-1 min-h-0">
@@ -356,6 +399,7 @@ export default function HomePage() {
             <TabsContent value="video" className="flex-1 m-0 min-h-0"><VideoPlayer /></TabsContent>
             <TabsContent value="versions" className="flex-1 m-0 min-h-0">
               <VersionTimeline
+                promptId={currentPromptId}
                 onSelectVersion={(v) => {
                   useAppStore.getState().setParams({
                     prompt: v.prompt,

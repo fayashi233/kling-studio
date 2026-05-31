@@ -6,23 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { GitBranch, Play, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-
-interface Version {
-  id: string;
-  parent_id: string;
-  prompt: string;
-  negative_prompt: string;
-  model_name: string;
-  mode: string;
-  duration: string;
-  aspect_ratio: string;
-  cfg_scale: number;
-  reference_image: string;
-  task_id: string;
-  video_url: string;
-  task_status: string;
-  created_at: string;
-}
+import type { PromptVersionRecord } from "@/types";
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   submitted: <Loader2 className="h-3 w-3 text-blue-500 animate-spin" />,
@@ -31,27 +15,30 @@ const STATUS_ICON: Record<string, React.ReactNode> = {
   failed: <XCircle className="h-3 w-3 text-red-500" />,
 };
 
-function buildTree(versions: Version[]): Version[] {
-  // Return versions in reverse chronological order (newest first)
-  // but maintain parent-child relationships for display
+function buildTree(versions: PromptVersionRecord[]): PromptVersionRecord[] {
   return [...versions].reverse();
 }
 
 export function VersionTimeline({
+  promptId,
   onSelectVersion,
 }: {
-  onSelectVersion: (v: Version) => void;
+  promptId: string | null;
+  onSelectVersion: (v: PromptVersionRecord) => void;
 }) {
-  const [versions, setVersions] = useState<Version[]>([]);
+  const [versions, setVersions] = useState<PromptVersionRecord[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const fetchVersions = useCallback(async () => {
     try {
-      const res = await fetch("/api/versions");
+      const url = promptId
+        ? `/api/versions?prompt_id=${encodeURIComponent(promptId)}`
+        : "/api/versions";
+      const res = await fetch(url);
       const data = await res.json();
       if (Array.isArray(data)) setVersions(data);
     } catch { /* ignore */ }
-  }, []);
+  }, [promptId]);
 
   useEffect(() => {
     fetchVersions();
@@ -59,17 +46,29 @@ export function VersionTimeline({
     return () => clearInterval(interval);
   }, [fetchVersions]);
 
-  const handleSelect = (v: Version) => {
+  const handleSelect = (v: PromptVersionRecord) => {
     setActiveId(v.id);
     onSelectVersion(v);
   };
 
+  // No prompt selected — prompt user to pick one from the library
+  if (!promptId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
+        <GitBranch className="h-8 w-8 mb-2 opacity-30" />
+        <p className="text-xs">请选择一个提示词</p>
+        <p className="text-[10px] mt-1">从左侧提示词库选择以查看版本历史</p>
+      </div>
+    );
+  }
+
+  // Prompt selected but no versions yet
   if (versions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
         <GitBranch className="h-8 w-8 mb-2 opacity-30" />
         <p className="text-xs">暂无版本记录</p>
-        <p className="text-[10px] mt-1">生成视频后自动创建版本</p>
+        <p className="text-[10px] mt-1">修改提示词并生成后将自动创建版本</p>
       </div>
     );
   }

@@ -2,18 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 
-// List all versions (optionally filtered by root prompt)
+// List all versions (optionally filtered by prompt_id)
 export async function GET(req: NextRequest) {
   const db = getDb();
-  const rootPrompt = req.nextUrl.searchParams.get("prompt");
+  const promptId = req.nextUrl.searchParams.get("prompt_id");
 
   let versions;
-  if (rootPrompt) {
-    // Find versions matching this prompt text (first 50 chars as key)
-    const key = rootPrompt.substring(0, 50);
+  if (promptId) {
     versions = db
-      .prepare(`SELECT * FROM prompt_versions WHERE prompt LIKE ? ORDER BY created_at ASC`)
-      .all(key + "%");
+      .prepare(`SELECT * FROM prompt_versions WHERE prompt_id = ? ORDER BY created_at ASC`)
+      .all(promptId);
   } else {
     versions = db
       .prepare(`SELECT * FROM prompt_versions ORDER BY created_at DESC LIMIT 200`)
@@ -30,11 +28,12 @@ export async function POST(req: NextRequest) {
     const id = uuidv4();
 
     db.prepare(
-      `INSERT INTO prompt_versions (id, parent_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, task_id, video_url, task_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO prompt_versions (id, parent_id, prompt_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, task_id, video_url, task_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       body.parent_id || "",
+      body.prompt_id || "",
       body.prompt,
       body.negative_prompt || "",
       body.model_name || "",

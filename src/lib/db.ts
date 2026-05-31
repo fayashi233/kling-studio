@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "path";
+import fs from "fs";
 
 const DB_PATH = path.join(process.cwd(), "data", "kling.db");
 
@@ -7,6 +8,11 @@ let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (db) return db;
+  // Ensure parent directory exists (data/ is gitignored, won't exist after clone)
+  const dataDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
   db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
   initSchema(db);
@@ -60,6 +66,7 @@ function initSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS prompt_versions (
       id TEXT PRIMARY KEY,
       parent_id TEXT DEFAULT '',
+      prompt_id TEXT DEFAULT '',
       prompt TEXT NOT NULL,
       negative_prompt TEXT DEFAULT '',
       model_name TEXT DEFAULT '',
@@ -86,4 +93,7 @@ function migrateSchema(db: Database.Database) {
   };
   addColumnIfMissing("prompts", "group_name", "TEXT DEFAULT ''");
   addColumnIfMissing("images", "base64_data", "TEXT DEFAULT ''");
+  addColumnIfMissing("prompt_versions", "prompt_id", "TEXT DEFAULT ''");
+  // Index for prompt_id lookups
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt_id ON prompt_versions(prompt_id)`);
 }

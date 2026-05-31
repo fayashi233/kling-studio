@@ -8,11 +8,17 @@ export async function GET(req: NextRequest) {
   let prompts;
   if (group) {
     prompts = db
-      .prepare("SELECT * FROM prompts WHERE group_name = ? ORDER BY created_at DESC")
+      .prepare(
+        `SELECT p.*, (SELECT COUNT(*) FROM prompt_versions pv WHERE pv.prompt_id = p.id) as version_count
+         FROM prompts p WHERE p.group_name = ? ORDER BY p.created_at DESC`
+      )
       .all(group);
   } else {
     prompts = db
-      .prepare("SELECT * FROM prompts ORDER BY created_at DESC")
+      .prepare(
+        `SELECT p.*, (SELECT COUNT(*) FROM prompt_versions pv WHERE pv.prompt_id = p.id) as version_count
+         FROM prompts p ORDER BY p.created_at DESC`
+      )
       .all();
   }
   return NextResponse.json(prompts);

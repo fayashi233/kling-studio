@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     if (taskId) {
       const db = getDb();
       db.prepare("UPDATE generations SET video_url = ? WHERE task_id = ?").run(localPath, taskId);
+      db.prepare("UPDATE prompt_versions SET video_url = ? WHERE task_id = ?").run(localPath, taskId);
     }
 
     console.log(`[VideoSave] Saved ${filename} (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);

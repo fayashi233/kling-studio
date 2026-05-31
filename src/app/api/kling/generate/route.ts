@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       videoClip,
       groupName,
       parentId,
+      promptId: inputPromptId,
     }: {
       params: KlingParams;
       image?: string;
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
       videoClip?: string;
       groupName?: string;
       parentId?: string;
+      promptId?: string;
     } = body;
 
     const db = getDb();
@@ -120,24 +122,47 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Save prompt record
-    const promptId = uuidv4();
+    // Save or update prompt record
     const generationId = uuidv4();
-    db.prepare(
-      `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, group_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      promptId,
-      params.prompt,
-      params.negative_prompt || "",
-      params.model_name,
-      params.mode,
-      params.duration,
-      params.aspect_ratio,
-      params.cfg_scale,
-      image || null,
-      groupName || ""
-    );
+    let promptId: string;
+
+    if (inputPromptId) {
+      // Iterating on an existing prompt — update it with latest params
+      promptId = inputPromptId;
+      db.prepare(
+        `UPDATE prompts SET prompt=?, negative_prompt=?, model_name=?, mode=?, duration=?, aspect_ratio=?, cfg_scale=?, reference_image=?, group_name=?
+         WHERE id=?`
+      ).run(
+        params.prompt,
+        params.negative_prompt || "",
+        params.model_name,
+        params.mode,
+        params.duration,
+        params.aspect_ratio,
+        params.cfg_scale,
+        image || null,
+        groupName || "",
+        promptId
+      );
+    } else {
+      // New prompt — insert fresh record
+      promptId = uuidv4();
+      db.prepare(
+        `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, group_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        promptId,
+        params.prompt,
+        params.negative_prompt || "",
+        params.model_name,
+        params.mode,
+        params.duration,
+        params.aspect_ratio,
+        params.cfg_scale,
+        image || null,
+        groupName || ""
+      );
+    }
 
     db.prepare(
       `INSERT INTO generations (id, prompt_id, task_id, task_status)
@@ -147,11 +172,12 @@ export async function POST(req: NextRequest) {
     // Create version record
     const versionId = uuidv4();
     db.prepare(
-      `INSERT INTO prompt_versions (id, parent_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, task_id, task_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')`
+      `INSERT INTO prompt_versions (id, parent_id, prompt_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, task_id, task_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')`
     ).run(
       versionId,
       parentId || "",
+      promptId,
       params.prompt,
       params.negative_prompt || "",
       params.model_name,

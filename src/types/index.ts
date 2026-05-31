@@ -100,6 +100,26 @@ export interface PromptRecord {
   tags: string;
   group_name: string;
   created_at: string;
+  /** Number of versions linked to this prompt via prompt_versions.prompt_id */
+  version_count?: number;
+}
+
+export interface PromptVersionRecord {
+  id: string;
+  parent_id: string;
+  prompt_id: string;
+  prompt: string;
+  negative_prompt: string;
+  model_name: string;
+  mode: string;
+  duration: string;
+  aspect_ratio: string;
+  cfg_scale: number;
+  reference_image: string;
+  task_id: string;
+  video_url: string;
+  task_status: string;
+  created_at: string;
 }
 
 export interface GenerationRecord {
