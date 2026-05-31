@@ -36,11 +36,15 @@ export async function GET(
           { status: 400 }
         );
       }
+      // Look up task_type from the generation record
+      const gen = db
+        .prepare("SELECT task_type FROM generations WHERE task_id = ?")
+        .get(taskId) as { task_type: string } | undefined;
       const token = generateToken(
         settings.kling_access_key,
         settings.kling_secret_key
       );
-      result = await getTaskStatus(token, taskId);
+      result = await getTaskStatus(token, taskId, gen?.task_type || "");
     }
 
     // Update DB

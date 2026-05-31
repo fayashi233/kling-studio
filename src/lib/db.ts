@@ -86,4 +86,5 @@ function migrateSchema(db: Database.Database) {
   };
   addColumnIfMissing("prompts", "group_name", "TEXT DEFAULT ''");
   addColumnIfMissing("images", "base64_data", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "task_type", "TEXT DEFAULT ''");
 }

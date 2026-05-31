@@ -102,18 +102,22 @@ export async function POST(req: NextRequest) {
         { lastFrame: resolvedLastFrame, audioUrl, videoClip }
       );
     } else {
-      if (!settings.kling_access_key || !settings.kling_secret_key) {
+      const accessKey = (settings.kling_access_key || "").trim();
+      const secretKey = (settings.kling_secret_key || "").trim();
+      if (!accessKey || !secretKey) {
         return NextResponse.json(
           { error: "请先在设置中配置可灵 API Keys" },
           { status: 400 }
         );
       }
-      const token = generateToken(
-        settings.kling_access_key,
-        settings.kling_secret_key
-      );
+      const token = generateToken(accessKey, secretKey);
       if (image) {
-        const imgParams: KlingImageParams = { ...params, image };
+        // Resolve local paths to base64; strip data URI prefix since Kling expects raw base64
+        const resolved = resolveImage(db, image);
+        const klingImage = resolved.startsWith("data:")
+          ? resolved.substring(resolved.indexOf("base64,") + "base64,".length)
+          : resolved;
+        const imgParams: KlingImageParams = { ...params, image: klingImage };
         taskId = await submitImage2Video(token, imgParams);
       } else {
         taskId = await submitText2Video(token, params);
@@ -123,6 +127,7 @@ export async function POST(req: NextRequest) {
     // Save prompt record
     const promptId = uuidv4();
     const generationId = uuidv4();
+    const taskType = image ? "image2video" : "text2video";
     db.prepare(
       `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, group_name)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -140,9 +145,9 @@ export async function POST(req: NextRequest) {
     );
 
     db.prepare(
-      `INSERT INTO generations (id, prompt_id, task_id, task_status)
-       VALUES (?, ?, ?, 'submitted')`
-    ).run(generationId, promptId, taskId);
+      `INSERT INTO generations (id, prompt_id, task_id, task_type, task_status)
+       VALUES (?, ?, ?, ?, 'submitted')`
+    ).run(generationId, promptId, taskId, taskType);
 
     // Create version record
     const versionId = uuidv4();
@@ -166,7 +171,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ taskId, promptId, generationId, versionId });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const authFailed = message.includes("(401)") || message.includes("Auth failed");
+    return NextResponse.json(
+      {
+        error: authFailed
+          ? "可灵 API 鉴权失败 (401)，请检查 Access Key 和 Secret Key 是否正确、是否已过期"
+          : message,
+      },
+      { status: authFailed ? 401 : 500 }
+    );
   }
 }
 

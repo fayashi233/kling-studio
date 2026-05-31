@@ -43,10 +43,17 @@ export function SettingsDialog({
   const handleSave = async () => {
     setSaving(true);
     try {
+      const trimmed = {
+        ...local,
+        kling_access_key: local.kling_access_key.trim(),
+        kling_secret_key: local.kling_secret_key.trim(),
+        dashscope_api_key: local.dashscope_api_key.trim(),
+        llm_api_key: local.llm_api_key.trim(),
+      };
       await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(local),
+        body: JSON.stringify(trimmed),
       });
       setSettings(local);
       onOpenChange(false);

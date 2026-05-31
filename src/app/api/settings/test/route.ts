@@ -30,14 +30,14 @@ export async function POST(req: NextRequest) {
       try {
         const token = generateToken(settings.kling_access_key, settings.kling_secret_key);
         // Try a simple API call to verify the token
-        const res = await fetch("https://api.klingai.com/v1/videos/text2video", {
+        const res = await fetch("https://api-beijing.klingai.com/v1/videos/text2video", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            model_name: "kling-v1",
+            model_name: "kling-v2-master",
             prompt: "test",
             mode: "std",
             duration: "5",
@@ -45,11 +45,12 @@ export async function POST(req: NextRequest) {
           }),
         });
         const data = await res.json();
-        // Even if the generation fails, if we get a proper response the key is valid
         if (data.data?.task_id || res.status === 200) {
           return NextResponse.json({ ok: true, message: "可灵 API 连接成功" });
         }
-        return NextResponse.json({ ok: false, message: `验证失败: ${data.message || data.code || "未知错误"}` });
+        const errMsg = data.message || data.code || "未知错误";
+        const hint = res.status === 401 ? " — 请检查 AK/SK 是否正确、是否已过期" : "";
+        return NextResponse.json({ ok: false, message: `验证失败: ${errMsg}${hint}` });
       } catch (err) {
         return NextResponse.json({ ok: false, message: `JWT 签名失败: ${(err as Error).message}` });
       }
