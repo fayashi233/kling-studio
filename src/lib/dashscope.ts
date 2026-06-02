@@ -41,7 +41,8 @@ function buildRequestBody(
   image?: string,
   lastFrame?: string,
   audioUrl?: string,
-  videoClip?: string
+  videoClip?: string,
+  elementIds?: string[]
 ): Record<string, unknown> {
   const model = params.model_name;
 
@@ -102,6 +103,10 @@ function buildRequestBody(
     if (media.length > 0) input.media = media;
   }
 
+  if (elementIds && elementIds.length > 0) {
+    input.element_list = elementIds.map(id => ({ element_id: Number(id) }));
+  }
+
   return { model, input, parameters };
 }
 
@@ -110,7 +115,7 @@ export async function dashscopeSubmit(
   params: KlingParams,
   image?: string,
   baseUrl?: string,
-  extra?: { lastFrame?: string; audioUrl?: string; videoClip?: string }
+  extra?: { lastFrame?: string; audioUrl?: string; videoClip?: string; elementIds?: string[] }
 ): Promise<string> {
   const base = baseUrl || DEFAULT_BASE;
   const body = buildRequestBody(
@@ -118,7 +123,8 @@ export async function dashscopeSubmit(
     image,
     extra?.lastFrame,
     extra?.audioUrl,
-    extra?.videoClip
+    extra?.videoClip,
+    extra?.elementIds
   );
 
   // DashScope 所有视频生成模型统一使用 /video-synthesis 端点

@@ -65,3 +65,52 @@ export async function getTaskStatus(
   const data = await klingFetch(token, `/v1/videos/${type}/${taskId}`);
   return data.data;
 }
+
+// ── Element / Subject ──
+
+export interface KlingElementCreateParams {
+  name: string;
+  coverImage: string;       // base64
+  tag?: string;
+  description?: string;
+}
+
+export interface KlingElementInfo {
+  id: string;
+  name: string;
+  description: string;
+  cover: { resource: string; width: number; height: number };
+  tagList: string[];
+  createTime: number;
+}
+
+export interface KlingElementListResult {
+  elements: KlingElementInfo[];
+}
+
+export async function createElement(
+  token: string,
+  params: KlingElementCreateParams
+): Promise<KlingElementInfo> {
+  const data = await klingFetch(token, "/v1/elements", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return data.data.elements?.[0] || data.data;
+}
+
+export async function listElements(
+  token: string
+): Promise<KlingElementInfo[]> {
+  const data = await klingFetch(token, "/v1/elements");
+  return data.data?.elements || data.data || [];
+}
+
+export async function deleteElement(
+  token: string,
+  elementId: string
+): Promise<void> {
+  await klingFetch(token, `/v1/elements/${elementId}`, {
+    method: "DELETE",
+  });
+}

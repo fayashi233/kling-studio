@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       lastFrame,
       audioUrl,
       videoClip,
+      elementIds,
       groupName,
       parentId,
       promptId: inputPromptId,
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
       lastFrame?: string;
       audioUrl?: string;
       videoClip?: string;
+      elementIds?: string[];
       groupName?: string;
       parentId?: string;
       promptId?: string;
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest) {
         params,
         resolvedImage,
         settings.dashscope_base_url || undefined,
-        { lastFrame: resolvedLastFrame, audioUrl, videoClip }
+        { lastFrame: resolvedLastFrame, audioUrl, videoClip, elementIds }
       );
     } else {
       const accessKey = (settings.kling_access_key || "").trim();
@@ -113,16 +115,21 @@ export async function POST(req: NextRequest) {
         );
       }
       const token = generateToken(accessKey, secretKey);
+      // Build extra params for elements
+      const extraParams: Record<string, unknown> = {};
+      if (elementIds && elementIds.length > 0) {
+        extraParams.element_list = elementIds.map((eid) => ({ element_id: eid }));
+      }
       if (image) {
         // Resolve local paths to base64; strip data URI prefix since Kling expects raw base64
         const resolved = resolveImage(db, image);
         const klingImage = resolved.startsWith("data:")
           ? resolved.substring(resolved.indexOf("base64,") + "base64,".length)
           : resolved;
-        const imgParams: KlingImageParams = { ...params, image: klingImage };
+        const imgParams: KlingImageParams = { ...params, image: klingImage, ...extraParams };
         taskId = await submitImage2Video(token, imgParams);
       } else {
-        taskId = await submitText2Video(token, params);
+        taskId = await submitText2Video(token, { ...params, ...extraParams });
       }
     }
 

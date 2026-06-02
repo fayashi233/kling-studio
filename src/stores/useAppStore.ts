@@ -9,6 +9,7 @@ import type {
   PromptRecord,
   ImageRecord,
   AppSettings,
+  ElementRecord,
 } from "@/types";
 
 interface GenerationTask {
@@ -61,6 +62,13 @@ interface AppState {
   // LLM
   llmLoading: boolean;
   setLlmLoading: (v: boolean) => void;
+
+  // Element / Subject binding
+  elements: ElementRecord[];
+  setElements: (elements: ElementRecord[]) => void;
+  selectedElementIds: string[];
+  setSelectedElementIds: (ids: string[]) => void;
+  toggleElementId: (id: string) => void;
 }
 
 const defaultParams: KlingParams = {
@@ -129,4 +137,15 @@ export const useAppStore = create<AppState>((set) => ({
 
   llmLoading: false,
   setLlmLoading: (v) => set({ llmLoading: v }),
+
+  elements: [],
+  setElements: (elements) => set({ elements }),
+  selectedElementIds: [],
+  setSelectedElementIds: (ids) => set({ selectedElementIds: ids }),
+  toggleElementId: (id) =>
+    set((s) => ({
+      selectedElementIds: s.selectedElementIds.includes(id)
+        ? s.selectedElementIds.filter((eid) => eid !== id)
+        : [...s.selectedElementIds, id],
+    })),
 }));

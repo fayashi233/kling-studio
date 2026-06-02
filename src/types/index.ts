@@ -140,6 +140,18 @@ export interface ImageRecord {
   created_at: string;
 }
 
+// ──── Element / Subject ────
+export interface ElementRecord {
+  id: string;               // local DB UUID
+  api_element_id: string;   // Kling "u_..." or DashScope integer string
+  name: string;
+  cover_url: string;
+  description: string;
+  tag: string;
+  provider: ProviderId;
+  created_at: string;
+}
+
 export interface AppSettings {
   provider: ProviderId;
   kling_access_key: string;
@@ -175,6 +187,7 @@ export interface ModelConfig {
   supportsAudio: boolean;
   supportsMotion: boolean;
   supports4k: boolean;
+  supportsElement: boolean;
 }
 
 export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
@@ -184,7 +197,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro", "4k"],
     durations: ["3", "5", "10", "15"],
     supportsImage: true, supportsMultiShot: true, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: true, supports4k: true,
+    supportsAudio: false, supportsMotion: true, supports4k: true, supportsElement: true,
   },
   {
     name: "kling-v3",
@@ -192,7 +205,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro", "4k"],
     durations: ["3", "5", "10", "15"],
     supportsImage: true, supportsMultiShot: true, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: true, supports4k: true,
+    supportsAudio: false, supportsMotion: true, supports4k: true, supportsElement: true,
   },
   {
     name: "kling-video-o1",
@@ -200,7 +213,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["3", "5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: true,
   },
   {
     name: "kling-v2-6",
@@ -208,7 +221,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: true, supportsMotion: true, supports4k: false,
+    supportsAudio: true, supportsMotion: true, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v2-5-turbo",
@@ -216,7 +229,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v2-1-master",
@@ -224,7 +237,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v2-1",
@@ -232,7 +245,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v2-master",
@@ -240,7 +253,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v2",
@@ -248,7 +261,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v1-6",
@@ -256,7 +269,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v1-5",
@@ -264,7 +277,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: true, supports4k: false,
+    supportsAudio: false, supportsMotion: true, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v1",
@@ -272,7 +285,7 @@ export const KLING_OFFICIAL_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: true, supports4k: false,
+    supportsAudio: false, supportsMotion: true, supports4k: false, supportsElement: false,
   },
 ];
 
@@ -284,7 +297,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["3", "5", "10", "15"],
     supportsImage: false, supportsMultiShot: true, supportsFirstLastFrame: false,
-    supportsAudio: true, supportsMotion: false, supports4k: false,
+    supportsAudio: true, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "wan2.7-t2v",
@@ -292,7 +305,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["3", "5", "10", "15"],
     supportsImage: false, supportsMultiShot: true, supportsFirstLastFrame: false,
-    supportsAudio: true, supportsMotion: false, supports4k: false,
+    supportsAudio: true, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   // ── 万相 2.7 图生视频 ──
   {
@@ -301,7 +314,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["3", "5", "10", "15"],
     supportsImage: true, supportsMultiShot: true, supportsFirstLastFrame: true,
-    supportsAudio: true, supportsMotion: false, supports4k: false,
+    supportsAudio: true, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "wan2.7-i2v",
@@ -309,7 +322,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["3", "5", "10", "15"],
     supportsImage: true, supportsMultiShot: true, supportsFirstLastFrame: true,
-    supportsAudio: true, supportsMotion: false, supports4k: false,
+    supportsAudio: true, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   // ── 万相 2.6 ──
   {
@@ -318,7 +331,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["3", "5", "10", "15"],
     supportsImage: false, supportsMultiShot: true, supportsFirstLastFrame: false,
-    supportsAudio: true, supportsMotion: false, supports4k: false,
+    supportsAudio: true, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   // ── 万相 2.5 ──
   {
@@ -327,7 +340,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std"],
     durations: ["5", "10"],
     supportsImage: false, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: true, supportsMotion: false, supports4k: false,
+    supportsAudio: true, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   // ── 万相 2.2 / 2.1 ──
   {
@@ -336,7 +349,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std"],
     durations: ["5"],
     supportsImage: false, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "wanx2.1-t2v-turbo",
@@ -344,7 +357,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std"],
     durations: ["5"],
     supportsImage: false, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "wanx2.1-t2v-plus",
@@ -352,7 +365,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std"],
     durations: ["5"],
     supportsImage: false, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   // ── 可灵 (通过百炼) ──
   // DashScope 上可灵模型名格式为 kling/kling-v3-video-generation
@@ -362,7 +375,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro", "4k"],
     durations: ["3", "5", "10", "15"],
     supportsImage: true, supportsMultiShot: true, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: true, supports4k: true,
+    supportsAudio: false, supportsMotion: true, supports4k: true, supportsElement: true,
   },
   {
     name: "kling-v2",
@@ -370,7 +383,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: false,
-    supportsAudio: false, supportsMotion: false, supports4k: false,
+    supportsAudio: false, supportsMotion: false, supports4k: false, supportsElement: false,
   },
   {
     name: "kling-v1",
@@ -378,7 +391,7 @@ export const DASHSCOPE_MODELS: ModelConfig[] = [
     modes: ["std", "pro"],
     durations: ["5", "10"],
     supportsImage: true, supportsMultiShot: false, supportsFirstLastFrame: true,
-    supportsAudio: false, supportsMotion: true, supports4k: false,
+    supportsAudio: false, supportsMotion: true, supports4k: false, supportsElement: false,
   },
 ];
 

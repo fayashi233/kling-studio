@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { PromptEditor } from "@/components/PromptEditor";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { ImageManager } from "@/components/ImageManager";
+import { SubjectManager } from "@/components/SubjectManager";
 import { LLMPanel } from "@/components/LLMPanel";
 import { TaskHistory } from "@/components/TaskHistory";
 import { VersionTimeline } from "@/components/VersionTimeline";
@@ -69,6 +70,7 @@ export default function HomePage() {
     setSavedPrompts, setImages, setSettings, setSettingsLoaded,
     llmLoading, setLlmLoading, setHistory, history,
     currentPromptId, setCurrentPromptId,
+    selectedElementIds,
   } = useAppStore();
 
   const pollingTasksRef = useRef<Set<string>>(new Set());
@@ -181,7 +183,7 @@ export default function HomePage() {
       const res = await fetch("/api/kling/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params, image: currentImage || undefined, parentId: currentVersionId, promptId: currentPromptId }),
+        body: JSON.stringify({ params, image: currentImage || undefined, parentId: currentVersionId, promptId: currentPromptId, elementIds: selectedElementIds.length > 0 ? selectedElementIds : undefined }),
       });
       const data = await res.json();
       if (data.error) { alert(data.error); setIsGenerating(false); return; }
@@ -196,7 +198,7 @@ export default function HomePage() {
       // 刷新侧边栏提示词列表（生成 API 已保存 prompt 到 DB）
       fetch("/api/prompts").then(r => r.json()).then(setSavedPrompts).catch(() => {});
     } catch (err) { alert("提交失败: " + (err as Error).message); setIsGenerating(false); }
-  }, [params, currentImage, currentVersionId, currentPromptId, setIsGenerating, addToHistory, setCurrentTask, startPolling, setSavedPrompts]);
+  }, [params, currentImage, currentVersionId, currentPromptId, selectedElementIds, setIsGenerating, addToHistory, setCurrentTask, startPolling, setSavedPrompts]);
 
   // ── Batch ──
   const handleBatchGenerate = useCallback(
@@ -361,6 +363,7 @@ export default function HomePage() {
                   cfg_scale: params.cfg_scale,
                 });
                 useAppStore.getState().setCurrentImage(null);
+                useAppStore.getState().setSelectedElementIds([]);
                 useAppStore.getState().setCurrentTask(null);
                 setCurrentVersionId(null);
               }}
@@ -373,7 +376,11 @@ export default function HomePage() {
                 <TabsTrigger value="llm" className="text-[11px] h-5 px-2"><Sparkles className="h-3 w-3 mr-1" />LLM 辅助</TabsTrigger>
               </TabsList>
               <TabsContent value="image" className="flex-1 mt-2">
-                <div className="border rounded-lg p-3 bg-card h-full"><ImageManager /></div>
+                <div className="border rounded-lg p-3 bg-card h-full overflow-y-auto">
+                  <ImageManager />
+                  <hr className="my-3" />
+                  <SubjectManager />
+                </div>
               </TabsContent>
               <TabsContent value="llm" className="flex-1 mt-2">
                 <div className="border rounded-lg p-3 bg-card h-full overflow-y-auto"><LLMPanel /></div>

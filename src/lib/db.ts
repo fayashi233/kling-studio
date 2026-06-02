@@ -80,6 +80,17 @@ function initSchema(db: Database.Database) {
       task_status TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS elements (
+      id TEXT PRIMARY KEY,
+      api_element_id TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      cover_url TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      tag TEXT DEFAULT '',
+      provider TEXT DEFAULT 'kling-official',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 }
 
