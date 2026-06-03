@@ -69,48 +69,105 @@ export async function getTaskStatus(
 // ── Element / Subject ──
 
 export interface KlingElementCreateParams {
-  name: string;
-  coverImage: string;       // base64
-  tag?: string;
-  description?: string;
+  element_name: string;
+  element_description: string;
+  reference_type: "image_refer" | "video_refer";
+  element_image_list?: {
+    frontal_image: string;
+    refer_images?: { image_url: string }[];
+  };
+  element_video_list?: {
+    refer_videos: { video_url: string }[];
+  };
+  tag_list?: { tag_id: string }[];
+  element_voice_id?: string;
 }
 
 export interface KlingElementInfo {
-  id: string;
-  name: string;
-  description: string;
-  cover: { resource: string; width: number; height: number };
-  tagList: string[];
-  createTime: number;
+  element_id: string;
+  element_name: string;
+  element_description: string;
+  reference_type?: string;
+  cover?: { resource: string; width?: number; height?: number };
+  tag_list?: { tag_id: string }[];
+  create_time?: number;
 }
 
-export interface KlingElementListResult {
-  elements: KlingElementInfo[];
-}
-
+// Create element (async — returns task_id, poll with queryElementTask)
 export async function createElement(
   token: string,
   params: KlingElementCreateParams
-): Promise<KlingElementInfo> {
-  const data = await klingFetch(token, "/v1/elements", {
+): Promise<{ taskId: string; status: string }> {
+  const data = await klingFetch(token, "/v1/general/advanced-custom-elements", {
     method: "POST",
-    body: JSON.stringify(params),
+    body: JSON.stringify({ ...params, callback_url: "" }),
   });
-  return data.data.elements?.[0] || data.data;
+  return { taskId: data.data.task_id, status: data.data.task_status };
 }
 
+// Query element creation / list task
+export async function queryElementTask(
+  token: string,
+  taskId: string
+): Promise<{ status: string; elements: KlingElementInfo[]; message?: string }> {
+  const data = await klingFetch(token, `/v1/general/advanced-custom-elements/${taskId}`);
+  return {
+    status: data.data?.task_status || data.task_status || "unknown",
+    elements: data.data?.task_result?.elements || data.task_result?.elements || [],
+    message: data.data?.task_status_msg,
+  };
+}
+
+// Poll element creation until succeed/failed
+export async function pollElementTask(
+  token: string,
+  taskId: string,
+  intervalMs = 5000,
+  timeoutMs = 120000
+): Promise<KlingElementInfo> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await queryElementTask(token, taskId);
+    if (result.status === "succeed") {
+      if (result.elements.length === 0) throw new Error("Element creation succeeded but returned no elements");
+      return result.elements[0];
+    }
+    if (result.status === "failed") {
+      throw new Error(`Element creation failed: ${result.message || "Unknown error"}`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error("Element creation timed out");
+}
+
+// List custom elements (paginated)
 export async function listElements(
-  token: string
+  token: string,
+  pageNum = 1,
+  pageSize = 30
 ): Promise<KlingElementInfo[]> {
-  const data = await klingFetch(token, "/v1/elements");
-  return data.data?.elements || data.data || [];
+  const data = await klingFetch(
+    token,
+    `/v1/general/advanced-custom-elements?pageNum=${pageNum}&pageSize=${pageSize}`
+  );
+  const raw = data.data || data;
+  // Response can be a single task object or an array
+  const items = Array.isArray(raw) ? raw : [raw];
+  const elements: KlingElementInfo[] = [];
+  for (const item of items) {
+    const elems = item?.task_result?.elements;
+    if (Array.isArray(elems)) elements.push(...elems);
+  }
+  return elements;
 }
 
+// Delete element
 export async function deleteElement(
   token: string,
   elementId: string
 ): Promise<void> {
-  await klingFetch(token, `/v1/elements/${elementId}`, {
-    method: "DELETE",
+  await klingFetch(token, "/v1/general/delete-elements", {
+    method: "POST",
+    body: JSON.stringify({ element_id: String(elementId) }),
   });
 }

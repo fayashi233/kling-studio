@@ -91,6 +91,9 @@ function initSchema(db: Database.Database) {
       provider TEXT DEFAULT 'kling-official',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    -- Ensure unique index on api_element_id (safe on existing tables)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_elements_api_element_id ON elements(api_element_id);
   `);
 }
 

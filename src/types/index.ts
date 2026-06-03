@@ -71,6 +71,7 @@ export interface KlingParams {
 
 export interface KlingImageParams extends KlingParams {
   image: string;
+  image_tail?: string;
 }
 
 export type TaskStatus = "submitted" | "processing" | "succeed" | "failed";

@@ -127,6 +127,13 @@ export async function POST(req: NextRequest) {
           ? resolved.substring(resolved.indexOf("base64,") + "base64,".length)
           : resolved;
         const imgParams: KlingImageParams = { ...params, image: klingImage, ...extraParams };
+        // Handle last frame (image_tail)
+        if (lastFrame) {
+          const resolvedTail = resolveImage(db, lastFrame);
+          imgParams.image_tail = resolvedTail.startsWith("data:")
+            ? resolvedTail.substring(resolvedTail.indexOf("base64,") + "base64,".length)
+            : resolvedTail;
+        }
         taskId = await submitImage2Video(token, imgParams);
       } else {
         taskId = await submitText2Video(token, { ...params, ...extraParams });

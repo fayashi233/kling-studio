@@ -65,7 +65,7 @@ export default function HomePage() {
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const {
-    params, currentImage, isGenerating, setIsGenerating,
+    params, currentImage, currentLastFrame, isGenerating, setIsGenerating,
     setCurrentTask, addToHistory, updateHistoryTask,
     setSavedPrompts, setImages, setSettings, setSettingsLoaded,
     llmLoading, setLlmLoading, setHistory, history,
@@ -183,7 +183,7 @@ export default function HomePage() {
       const res = await fetch("/api/kling/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params, image: currentImage || undefined, parentId: currentVersionId, promptId: currentPromptId, elementIds: selectedElementIds.length > 0 ? selectedElementIds : undefined }),
+        body: JSON.stringify({ params, image: currentImage || undefined, lastFrame: currentLastFrame || undefined, parentId: currentVersionId, promptId: currentPromptId, elementIds: selectedElementIds.length > 0 ? selectedElementIds : undefined }),
       });
       const data = await res.json();
       if (data.error) { alert(data.error); setIsGenerating(false); return; }
@@ -198,7 +198,7 @@ export default function HomePage() {
       // 刷新侧边栏提示词列表（生成 API 已保存 prompt 到 DB）
       fetch("/api/prompts").then(r => r.json()).then(setSavedPrompts).catch(() => {});
     } catch (err) { alert("提交失败: " + (err as Error).message); setIsGenerating(false); }
-  }, [params, currentImage, currentVersionId, currentPromptId, selectedElementIds, setIsGenerating, addToHistory, setCurrentTask, startPolling, setSavedPrompts]);
+  }, [params, currentImage, currentLastFrame, currentVersionId, currentPromptId, selectedElementIds, setIsGenerating, addToHistory, setCurrentTask, startPolling, setSavedPrompts]);
 
   // ── Batch ──
   const handleBatchGenerate = useCallback(
@@ -363,6 +363,7 @@ export default function HomePage() {
                   cfg_scale: params.cfg_scale,
                 });
                 useAppStore.getState().setCurrentImage(null);
+                useAppStore.getState().setCurrentLastFrame(null);
                 useAppStore.getState().setSelectedElementIds([]);
                 useAppStore.getState().setCurrentTask(null);
                 setCurrentVersionId(null);

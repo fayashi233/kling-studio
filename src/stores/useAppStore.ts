@@ -30,6 +30,10 @@ interface AppState {
   // Reference image
   currentImage: string | null;
   setCurrentImage: (img: string | null) => void;
+  currentLastFrame: string | null;
+  setCurrentLastFrame: (img: string | null) => void;
+  referenceMode: "single" | "firstlast";
+  setReferenceMode: (mode: "single" | "firstlast") => void;
   images: ImageRecord[];
   setImages: (images: ImageRecord[]) => void;
 
@@ -100,6 +104,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   currentImage: null,
   setCurrentImage: (img) => set({ currentImage: img }),
+  currentLastFrame: null,
+  setCurrentLastFrame: (img) => set({ currentLastFrame: img }),
+  referenceMode: "single",
+  setReferenceMode: (mode) => set({ referenceMode: mode }),
   images: [],
   setImages: (images) => set({ images }),
 

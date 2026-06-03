@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { generateToken, createElement, listElements, deleteElement } from "@/lib/kling";
+import { generateToken, createElement, pollElementTask, listElements, deleteElement } from "@/lib/kling";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
@@ -26,22 +26,43 @@ function loadSettings(db: ReturnType<typeof getDb>): AppSettings {
   };
 }
 
-function resolveToBase64(image: string): string {
-  if (image.startsWith("data:")) return image;
-  if (image.startsWith("/uploads/")) {
-    const filepath = path.join(process.cwd(), "public", image);
-    if (fs.existsSync(filepath)) {
-      const buffer = fs.readFileSync(filepath);
-      const ext = image.split(".").pop()?.toLowerCase() || "jpg";
-      const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-      return `data:${mime};base64,${buffer.toString("base64")}`;
-    }
-  }
-  return image;
+function fileToBase64(buffer: Buffer, mime: string): string {
+  return `data:${mime};base64,${buffer.toString("base64")}`;
 }
 
 export async function GET() {
   const db = getDb();
+  // Read all locally stored elements
+  const localElements = db
+    .prepare("SELECT id, api_element_id, name, cover_url, description, tag, provider, created_at FROM elements ORDER BY created_at DESC")
+    .all();
+
+  // Also try fetching from Kling API to sync
+  try {
+    const settings = loadSettings(db);
+    if (settings.provider === "kling-official" && settings.kling_access_key && settings.kling_secret_key) {
+      const token = generateToken(settings.kling_access_key.trim(), settings.kling_secret_key.trim());
+      const remoteElements = await listElements(token);
+      // Merge remote elements into local DB
+      const insertStmt = db.prepare(
+        "INSERT OR IGNORE INTO elements (id, api_element_id, name, cover_url, description, tag, provider) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+      for (const el of remoteElements) {
+        const coverUrl = el.cover?.resource || "";
+        insertStmt.run(
+          uuidv4(),
+          el.element_id,
+          el.element_name,
+          coverUrl,
+          el.element_description || "",
+          "",
+          "kling-official"
+        );
+      }
+    }
+  } catch { /* sync is best-effort */ }
+
+  // Re-read after sync
   const elements = db
     .prepare("SELECT id, api_element_id, name, cover_url, description, tag, provider, created_at FROM elements ORDER BY created_at DESC")
     .all();
@@ -87,9 +108,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve image
-    let coverImage: string;
+    // Resolve image to base64
     let coverUrl: string;
+    let coverBase64: string;
     if (file) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const ext = file.name.split(".").pop() || "jpg";
@@ -99,38 +120,61 @@ export async function POST(req: NextRequest) {
       fs.writeFileSync(path.join(uploadsDir, filename), buffer);
       coverUrl = `/uploads/${filename}`;
       const mime = file.type || "image/jpeg";
-      coverImage = `data:${mime};base64,${buffer.toString("base64")}`;
+      coverBase64 = fileToBase64(buffer, mime);
     } else if (url) {
       coverUrl = url;
-      coverImage = resolveToBase64(url);
+      // If it's already a local upload, resolve to base64
+      if (url.startsWith("/uploads/")) {
+        const filepath = path.join(process.cwd(), "public", url);
+        if (fs.existsSync(filepath)) {
+          const buffer = fs.readFileSync(filepath);
+          const ext = url.split(".").pop()?.toLowerCase() || "jpg";
+          const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+          coverBase64 = fileToBase64(buffer, mime);
+        } else {
+          coverBase64 = url; // pass URL as-is (Kling accepts URLs)
+        }
+      } else {
+        coverBase64 = url;
+      }
     } else {
       return NextResponse.json({ error: "请上传主体图片或提供 URL" }, { status: 400 });
     }
 
-    // Strip data URI prefix — Kling API expects raw base64
-    const rawBase64 = coverImage.startsWith("data:")
-      ? coverImage.substring(coverImage.indexOf("base64,") + "base64,".length)
-      : coverImage;
+    // Strip data URI prefix — Kling expects raw base64
+    const frontalImage = coverBase64.startsWith("data:")
+      ? coverBase64.substring(coverBase64.indexOf("base64,") + 7)
+      : coverBase64;
 
     const token = generateToken(accessKey, secretKey);
-    const result = await createElement(token, {
-      name: name.substring(0, 15),
-      coverImage: rawBase64,
-      tag: tag || undefined,
-      description: description || undefined,
+
+    // Submit creation task — Kling requires 1-3 refer_images
+    const { taskId } = await createElement(token, {
+      element_name: name.substring(0, 20),
+      element_description: description || name,
+      reference_type: "image_refer",
+      element_image_list: {
+        frontal_image: frontalImage,
+        refer_images: [{ image_url: frontalImage }],
+      },
     });
 
+    // Poll until complete
+    const result = await pollElementTask(token, taskId);
+
+    // Save to local DB
     const localId = uuidv4();
+    const resultCoverUrl = result.cover?.resource || coverUrl;
     db.prepare(
       "INSERT INTO elements (id, api_element_id, name, cover_url, description, tag, provider) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(localId, result.id, result.name, result.cover?.resource || coverUrl, result.description || description, tag, "kling-official");
+    ).run(localId, result.element_id, result.element_name, resultCoverUrl, result.element_description || description, tag, "kling-official");
 
     return NextResponse.json({
       id: localId,
-      api_element_id: result.id,
-      name: result.name,
-      cover_url: result.cover?.resource || coverUrl,
-      description: result.description,
+      api_element_id: result.element_id,
+      name: result.element_name,
+      cover_url: resultCoverUrl,
+      description: result.element_description,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
