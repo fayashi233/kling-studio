@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowLeft, Download, RefreshCw, Save } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { generateExportCodesForRows } from "@/lib/exportCodes";
 
 export interface ExportTableRow {
   id: string;
@@ -49,9 +50,6 @@ const CASE_OPTIONS = [
 ];
 
 const EDITABLE_FIELDS: Array<keyof ExportTableRow> = [
-  "video_code",
-  "first_frame_code",
-  "last_frame_code",
   "original_image_code",
   "image_source",
   "image_tool",
@@ -71,15 +69,6 @@ function groupLabel(groupName: string) {
 
 function uniq(values: string[]) {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
-}
-
-function viewPrefix(view: string) {
-  if (view === "wayside view") return "W";
-  return "V";
-}
-
-function codeType(caseType: string) {
-  return caseType.endsWith("_case") ? caseType.slice(0, -"_case".length) : caseType;
 }
 
 async function downloadZip(taskIds?: string[]) {
@@ -126,6 +115,11 @@ export function ExportWorkbench({
   const [extraViews, setExtraViews] = useState<string[]>([]);
   const [extraScenes, setExtraScenes] = useState<string[]>([]);
   const [extraCases, setExtraCases] = useState<string[]>([]);
+  const rowsRef = useRef(rows);
+
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
 
   const visibleRows = useMemo(() => {
     return rows.filter((row) => {
@@ -152,10 +146,39 @@ export function ExportWorkbench({
     cases: uniq([...CASE_OPTIONS, ...extraCases, ...rows.map((row) => row.export_case_type)]),
   }), [extraCases, extraScenes, extraViews, rows]);
 
+  const normalizeCodes = (nextRows: ExportTableRow[]) => {
+    return generateExportCodesForRows(nextRows, { overwriteExisting: true });
+  };
+
+  const commitRows = (nextRows: ExportTableRow[], dirtyIds: Set<string>) => {
+    onRowsChange(nextRows);
+    setDirty((prev) => {
+      const next = new Set(prev);
+      for (const id of dirtyIds) next.add(id);
+      return next;
+    });
+  };
+
   const patchRow = (taskId: string, update: Partial<ExportTableRow>) => {
-    onRowsChange(rows.map((row) => row.task_id === taskId ? { ...row, ...update } : row));
+    const changesCodes = "export_view_type" in update || "export_scene_type" in update || "export_case_type" in update;
+    const baseRows = rows.map((row) => row.task_id === taskId ? { ...row, ...update } : row);
+    const nextRows = changesCodes ? normalizeCodes(baseRows) : baseRows;
     rememberOptions(update);
-    setDirty((prev) => new Set(prev).add(taskId));
+    const dirtyIds = new Set<string>([taskId]);
+    if (changesCodes) {
+      for (const row of rows) {
+        const next = nextRows.find((item) => item.task_id === row.task_id);
+        if (
+          next &&
+          (next.video_code !== row.video_code ||
+            next.first_frame_code !== row.first_frame_code ||
+            next.last_frame_code !== row.last_frame_code)
+        ) {
+          dirtyIds.add(row.task_id);
+        }
+      }
+    }
+    commitRows(nextRows, dirtyIds);
   };
 
   const rememberOptions = (update: Partial<ExportTableRow>) => {
@@ -166,13 +189,25 @@ export function ExportWorkbench({
 
   const patchRows = (targetRows: ExportTableRow[], update: Partial<ExportTableRow>) => {
     const ids = new Set(targetRows.map((row) => row.task_id));
-    onRowsChange(rows.map((row) => ids.has(row.task_id) ? { ...row, ...update } : row));
+    const changesCodes = "export_view_type" in update || "export_scene_type" in update || "export_case_type" in update;
+    const baseRows = rows.map((row) => ids.has(row.task_id) ? { ...row, ...update } : row);
+    const nextRows = changesCodes ? normalizeCodes(baseRows) : baseRows;
     rememberOptions(update);
-    setDirty((prev) => {
-      const next = new Set(prev);
-      for (const row of targetRows) next.add(row.task_id);
-      return next;
-    });
+    const dirtyIds = new Set<string>(targetRows.map((row) => row.task_id));
+    if (changesCodes) {
+      for (const row of rows) {
+        const next = nextRows.find((item) => item.task_id === row.task_id);
+        if (
+          next &&
+          (next.video_code !== row.video_code ||
+            next.first_frame_code !== row.first_frame_code ||
+            next.last_frame_code !== row.last_frame_code)
+        ) {
+          dirtyIds.add(row.task_id);
+        }
+      }
+    }
+    commitRows(nextRows, dirtyIds);
   };
 
   const setVisibleSelected = (selected: boolean) => {
@@ -194,38 +229,28 @@ export function ExportWorkbench({
     setMessage(`已批量分类 ${targetRows.length} 行`);
   };
 
-  const autoNumberRows = (targetRows: ExportTableRow[], overwrite = false) => {
-    const counters = new Map<string, number>();
+  const autoNumberRows = (targetRows: ExportTableRow[]) => {
     const targetIds = new Set(targetRows.map((row) => row.task_id));
-    const nextRows = rows.map((row) => {
-      if (!targetIds.has(row.task_id)) return row;
-      if (!overwrite && row.video_code.trim()) return row;
-      const view = row.export_view_type.trim();
-      const scene = row.export_scene_type.trim();
-      const caseType = row.export_case_type.trim();
-      if (!view || !scene || !caseType) return row;
-      const key = `${view}\u0000${scene}\u0000${caseType}`;
-      const next = (counters.get(key) || 0) + 1;
-      counters.set(key, next);
-      const videoCode = `${viewPrefix(view)}-${scene}-${codeType(caseType)}-${String(next).padStart(2, "0")}`;
-      return {
-        ...row,
-        video_code: videoCode,
-        first_frame_code: `${videoCode}_FF`,
-        last_frame_code: `${videoCode}_LF`,
-      };
-    });
-    onRowsChange(nextRows);
-    setDirty((prev) => {
-      const next = new Set(prev);
-      for (const row of targetRows) next.add(row.task_id);
-      return next;
-    });
-    setMessage(`已自动编号 ${targetRows.length} 行${overwrite ? "（覆盖）" : ""}`);
+    const normalized = normalizeCodes(rows);
+    const dirtyIds = new Set<string>();
+    for (const row of rows) {
+      const next = normalized.find((item) => item.task_id === row.task_id);
+      if (
+        next &&
+        targetIds.has(row.task_id) &&
+        (next.video_code !== row.video_code ||
+          next.first_frame_code !== row.first_frame_code ||
+          next.last_frame_code !== row.last_frame_code)
+      ) {
+        dirtyIds.add(row.task_id);
+      }
+    }
+    commitRows(normalized, dirtyIds);
+    setMessage(`已刷新 ${targetRows.length} 行编号`);
   };
 
-  const persistDirtyRows = async () => {
-    const dirtyRows = rows.filter((row) => dirty.has(row.task_id));
+  const persistDirtyRows = useCallback(async (ids: Set<string>) => {
+    const dirtyRows = rowsRef.current.filter((row) => ids.has(row.task_id));
     if (dirtyRows.length === 0) return 0;
     const res = await fetch("/api/export/rows", {
       method: "PATCH",
@@ -234,15 +259,37 @@ export function ExportWorkbench({
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    setDirty(new Set());
+    setDirty((prev) => {
+      const next = new Set(prev);
+      for (const row of dirtyRows) next.delete(row.task_id);
+      return next;
+    });
     return dirtyRows.length;
-  };
+  }, []);
 
-  const save = async () => {
+  useEffect(() => {
+    if (dirty.size === 0) return;
+    const ids = new Set(dirty);
+    const timer = window.setTimeout(async () => {
+      setSaving(true);
+      setMessage("正在自动保存...");
+      try {
+        const count = await persistDirtyRows(ids);
+        setMessage(`已自动保存 ${count} 行`);
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : "自动保存失败");
+      } finally {
+        setSaving(false);
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [dirty, persistDirtyRows]);
+
+  const flushSave = async () => {
     setSaving(true);
     setMessage("");
     try {
-      const count = await persistDirtyRows();
+      const count = await persistDirtyRows(new Set(dirty));
       setMessage(`已保存 ${count} 行`);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "保存失败");
@@ -255,7 +302,7 @@ export function ExportWorkbench({
     setExporting(true);
     setMessage("");
     try {
-      if (dirty.size > 0) await persistDirtyRows();
+      if (dirty.size > 0) await flushSave();
       const taskIds = rows.filter((row) => !!row.export_selected).map((row) => row.task_id);
       if (taskIds.length === 0) throw new Error("请先勾选要导出的行");
       await downloadZip(taskIds);
@@ -288,14 +335,11 @@ export function ExportWorkbench({
           <Button variant={filter === "unexported" ? "default" : "outline"} size="sm" className="h-7 text-xs" onClick={() => setFilter("unexported")}>显示未导出</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setVisibleSelected(true)}>勾选当前</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setVisibleSelected(false)}>取消当前</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(visibleRows, false)}>自动编号当前</Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(visibleRows, true)}>覆盖编号重算</Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(visibleRows)}>刷新当前编号</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onRefresh}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" />刷新
           </Button>
-          <Button size="sm" className="h-7 text-xs" onClick={save} disabled={saving || dirty.size === 0}>
-            <Save className="h-3.5 w-3.5 mr-1" />保存
-          </Button>
+          <span className="text-[10px] text-muted-foreground">{saving ? "保存中" : dirty.size > 0 ? `${dirty.size} 行待保存` : "已保存"}</span>
           <Button size="sm" className="h-7 text-xs" onClick={exportSelected} disabled={exporting}>
             <Download className="h-3.5 w-3.5 mr-1" />导出选中
           </Button>
@@ -310,11 +354,11 @@ export function ExportWorkbench({
         <DatalistInput className="w-44" value={bulkCase} onChange={setBulkCase} options={optionSets.cases} listId="bulk-case-options" placeholder="类型" />
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => applyBulkCategory(visibleRows)}>应用到当前筛选</Button>
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => applyBulkCategory(selectedRows())}>应用到已勾选</Button>
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(selectedRows(), false)}>编号已勾选</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(selectedRows())}>刷新已勾选编号</Button>
       </div>
 
       <main className="flex-1 overflow-auto">
-        <div className="min-w-[2200px] p-3 space-y-3">
+        <div className="min-w-[2800px] p-3 space-y-3">
           {groups.map(([group, groupRows]) => {
             const isCollapsed = collapsed.has(group);
             const selectedCount = groupRows.filter((row) => !!row.export_selected).length;
@@ -338,7 +382,7 @@ export function ExportWorkbench({
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => patchRows(groupRows, { export_selected: 1 })}>全选分组</Button>
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => patchRows(groupRows, { export_selected: 0 })}>取消分组</Button>
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => applyBulkCategory(groupRows)}>批量分类</Button>
-                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => autoNumberRows(groupRows, false)}>分组自动编号</Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => autoNumberRows(groupRows)}>刷新分组编号</Button>
                 </div>
                 {!isCollapsed && (
                   <ExportTable rows={groupRows} patchRow={patchRow} optionSets={optionSets} />
@@ -375,16 +419,16 @@ function ExportTable({
           <th className="w-28">分组</th>
           <th className="w-44">视频/任务</th>
           <th className="w-80">视频提示词</th>
-          <th className="w-28">视频编号</th>
-          <th className="w-28">首帧编号</th>
-          <th className="w-28">尾帧编号</th>
-          <th className="w-32">原图编号</th>
-          <th className="w-32">输入图片来源</th>
-          <th className="w-28">图片工具</th>
-          <th className="w-28">视频工具</th>
-          <th className="w-32">视角</th>
-          <th className="w-32">场景</th>
-          <th className="w-40">案例类型</th>
+          <th className="w-44">视频编号</th>
+          <th className="w-44">首帧编号</th>
+          <th className="w-44">尾帧编号</th>
+          <th className="w-36">原图编号</th>
+          <th className="w-36">输入图片来源</th>
+          <th className="w-32">图片工具</th>
+          <th className="w-32">视频工具</th>
+          <th className="w-44">视角</th>
+          <th className="w-44">场景</th>
+          <th className="w-52">案例类型</th>
           <th className="w-24">是否可用</th>
           <th className="w-32">问题类型</th>
           <th className="w-56">问题描述</th>
@@ -420,6 +464,9 @@ function ExportTable({
             <td>
               <Textarea className="min-h-20 text-[11px]" value={row.prompt} readOnly />
             </td>
+            <ReadonlyCode value={row.video_code} />
+            <ReadonlyCode value={row.first_frame_code} />
+            <ReadonlyCode value={row.last_frame_code} />
             {EDITABLE_FIELDS.map((field) => (
               <td key={field}>
                 {field === "issue_description" ? (
@@ -440,7 +487,7 @@ function ExportTable({
                           ? optionSets.scenes
                           : optionSets.cases
                     }
-                    listId={`${field}-options`}
+                    listId={`${field}-${row.task_id}-options`}
                   />
                 ) : (
                   <Input
@@ -455,6 +502,16 @@ function ExportTable({
         ))}
       </tbody>
     </table>
+  );
+}
+
+function ReadonlyCode({ value }: { value: string }) {
+  return (
+    <td>
+      <div className="min-h-7 rounded border bg-muted/30 px-2 py-1 text-[11px] break-all text-muted-foreground">
+        {value || "分类完整后自动生成"}
+      </div>
+    </td>
   );
 }
 

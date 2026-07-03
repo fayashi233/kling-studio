@@ -80,10 +80,12 @@ function ExportMetadataForm({ task }: { task: NonNullable<Task> }) {
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      const nextMetadata = { ...metadata, ...(data.generation || {}) };
+      setMetadata(nextMetadata);
       updateHistoryTask(task.taskId, {
-        exportMetadata: metadata,
-        quality: metadata.usable === "否" ? "bad" : task.quality,
-        rejectReason: metadata.issue_type || task.rejectReason,
+        exportMetadata: nextMetadata,
+        quality: nextMetadata.usable === "否" ? "bad" : task.quality,
+        rejectReason: nextMetadata.issue_type || task.rejectReason,
       });
       setMessage("标注已保存");
     } catch (err) {
@@ -126,9 +128,9 @@ function ExportMetadataForm({ task }: { task: NonNullable<Task> }) {
       </section>
 
       <section className="grid grid-cols-2 gap-2">
-        <Field label="视频编号" value={metadata.video_code} onChange={(v) => setField("video_code", v)} />
-        <Field label="首帧编号" value={metadata.first_frame_code} onChange={(v) => setField("first_frame_code", v)} />
-        <Field label="尾帧编号" value={metadata.last_frame_code} onChange={(v) => setField("last_frame_code", v)} />
+        <ReadonlyField label="视频编号" value={metadata.video_code} />
+        <ReadonlyField label="首帧编号" value={metadata.first_frame_code} />
+        <ReadonlyField label="尾帧编号" value={metadata.last_frame_code} />
         <Field label="原图编号" value={metadata.original_image_code} onChange={(v) => setField("original_image_code", v)} />
         <Field label="图片来源" value={metadata.image_source} onChange={(v) => setField("image_source", v)} />
         <Field label="图片工具" value={metadata.image_tool} onChange={(v) => setField("image_tool", v)} />
@@ -157,6 +159,17 @@ function ExportMetadataForm({ task }: { task: NonNullable<Task> }) {
       </div>
 
       {message && <p className="text-[10px] text-muted-foreground">{message}</p>}
+    </div>
+  );
+}
+
+function ReadonlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-[10px]">{label}</Label>
+      <div className="min-h-7 rounded border bg-muted/30 px-2 py-1 text-xs break-all text-muted-foreground">
+        {value || "分类保存后自动生成"}
+      </div>
     </div>
   );
 }

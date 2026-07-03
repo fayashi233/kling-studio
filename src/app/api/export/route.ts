@@ -6,6 +6,7 @@ import { createZip, type ZipEntry } from "@/lib/zip";
 import { createSimpleXlsx } from "@/lib/xlsx";
 import { v4 as uuidv4 } from "uuid";
 import { buildVideoInfoText } from "@/lib/videoInfo";
+import { generateExportCodesForRows } from "@/lib/exportCodes";
 
 const HEADERS = [
   "视频提示词",
@@ -50,6 +51,20 @@ interface ExportRow {
   issue_description: string;
 }
 
+const EXPORT_ORDER_SQL = `
+  SELECT
+    g.task_id,
+    COALESCE(g.export_view_type, '') as export_view_type,
+    COALESCE(g.export_scene_type, '') as export_scene_type,
+    COALESCE(g.export_case_type, '') as export_case_type,
+    COALESCE(g.video_code, '') as video_code
+  FROM generations g
+  JOIN prompts p ON p.id = g.prompt_id
+  ORDER BY
+    CASE WHEN p.group_name IS NULL OR p.group_name = '' THEN '未分组' ELSE p.group_name END ASC,
+    g.created_at DESC
+`;
+
 function cleanSegment(value: string): string {
   return value.trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
 }
@@ -63,6 +78,28 @@ function localVideoPath(videoUrl: string | null): string | null {
 function videoExtension(videoUrl: string | null): string {
   const ext = videoUrl ? path.extname(videoUrl.split("?")[0]) : "";
   return ext || ".mp4";
+}
+
+function backfillMissingCodes(db: ReturnType<typeof getDb>) {
+  const rows = db.prepare(EXPORT_ORDER_SQL).all() as Array<{
+    task_id: string;
+    export_view_type: string;
+    export_scene_type: string;
+    export_case_type: string;
+    video_code: string;
+  }>;
+  const generated = generateExportCodesForRows(rows);
+  const update = db.prepare(`
+    UPDATE generations
+    SET video_code = ?, first_frame_code = ?, last_frame_code = ?
+    WHERE task_id = ?
+  `);
+  const tx = db.transaction(() => {
+    for (const row of generated) {
+      update.run(row.video_code, row.first_frame_code, row.last_frame_code, row.task_id);
+    }
+  });
+  tx();
 }
 
 function buildQuery(scope: string, groupName: string, taskIds: string[]) {
@@ -138,6 +175,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "groupName required" }, { status: 400 });
     }
     const db = getDb();
+    backfillMissingCodes(db);
     const query = buildQuery(scope, groupName, taskIds);
     const rows = db.prepare(query.sql).all(...query.params) as ExportRow[];
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { generateExportCodesForRows } from "@/lib/exportCodes";
 
 const EDITABLE = [
   "export_selected",
@@ -19,9 +20,7 @@ const EDITABLE = [
   "export_tags",
 ] as const;
 
-export async function GET() {
-  const db = getDb();
-  const rows = db.prepare(`
+const EXPORT_ROWS_SQL = `
     SELECT
       g.*,
       p.prompt,
@@ -33,7 +32,46 @@ export async function GET() {
     ORDER BY
       CASE WHEN p.group_name IS NULL OR p.group_name = '' THEN '未分组' ELSE p.group_name END ASC,
       g.created_at DESC
-  `).all();
+  `;
+
+type ExportRow = {
+  task_id: string;
+  export_view_type: string;
+  export_scene_type: string;
+  export_case_type: string;
+  video_code: string;
+  first_frame_code: string;
+  last_frame_code: string;
+};
+
+function backfillMissingCodes(db: ReturnType<typeof getDb>, overwriteExisting = false) {
+  const rows = db.prepare(EXPORT_ROWS_SQL).all() as ExportRow[];
+  const generated = generateExportCodesForRows(rows, { overwriteExisting });
+  const update = db.prepare(`
+    UPDATE generations
+    SET video_code = ?, first_frame_code = ?, last_frame_code = ?
+    WHERE task_id = ?
+  `);
+  const tx = db.transaction(() => {
+    for (const row of generated) {
+      const current = rows.find((item) => item.task_id === row.task_id);
+      if (!current) continue;
+      const changed =
+        current.video_code !== row.video_code ||
+        current.first_frame_code !== row.first_frame_code ||
+        current.last_frame_code !== row.last_frame_code;
+      if (changed) {
+        update.run(row.video_code, row.first_frame_code, row.last_frame_code, row.task_id);
+      }
+    }
+  });
+  tx();
+}
+
+export async function GET() {
+  const db = getDb();
+  backfillMissingCodes(db);
+  const rows = db.prepare(EXPORT_ROWS_SQL).all();
   return NextResponse.json(rows);
 }
 
@@ -47,6 +85,7 @@ export async function PATCH(req: NextRequest) {
 
     const db = getDb();
     const updated: string[] = [];
+    let shouldRegenerateCodes = false;
     const tx = db.transaction(() => {
       for (const row of rows) {
         const taskId = String(row.task_id || row.taskId || "");
@@ -57,6 +96,9 @@ export async function PATCH(req: NextRequest) {
           if (Object.prototype.hasOwnProperty.call(row, key)) {
             setClauses.push(`${key} = ?`);
             values.push(key === "export_selected" ? (row[key] ? 1 : 0) : String(row[key] ?? ""));
+            if (key === "export_view_type" || key === "export_scene_type" || key === "export_case_type") {
+              shouldRegenerateCodes = true;
+            }
           }
         }
         if (setClauses.length === 0) continue;
@@ -66,6 +108,7 @@ export async function PATCH(req: NextRequest) {
       }
     });
     tx();
+    if (shouldRegenerateCodes) backfillMissingCodes(db, true);
 
     return NextResponse.json({ ok: true, updated });
   } catch (err: unknown) {
