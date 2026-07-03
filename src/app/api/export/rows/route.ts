@@ -10,7 +10,6 @@ const EDITABLE = [
   "video_code",
   "first_frame_code",
   "last_frame_code",
-  "original_image_code",
   "image_source",
   "image_tool",
   "video_tool",
@@ -22,7 +21,28 @@ const EDITABLE = [
 
 const EXPORT_ROWS_SQL = `
     SELECT
-      g.*,
+      g.id,
+      g.prompt_id,
+      g.task_id,
+      g.task_status,
+      g.video_url,
+      g.export_view_type,
+      g.export_scene_type,
+      g.export_case_type,
+      g.video_code,
+      g.first_frame_code,
+      g.last_frame_code,
+      g.image_source,
+      g.image_tool,
+      g.video_tool,
+      g.usable,
+      g.issue_type,
+      g.issue_description,
+      g.export_tags,
+      g.export_selected,
+      g.exported_at,
+      g.export_batch_id,
+      g.created_at,
       p.prompt,
       p.group_name,
       p.reference_image,
@@ -42,6 +62,8 @@ type ExportRow = {
   video_code: string;
   first_frame_code: string;
   last_frame_code: string;
+  reference_image: string | null;
+  last_frame_image: string | null;
 };
 
 function backfillMissingCodes(db: ReturnType<typeof getDb>, overwriteExisting = false) {
@@ -70,7 +92,7 @@ function backfillMissingCodes(db: ReturnType<typeof getDb>, overwriteExisting = 
 
 export async function GET() {
   const db = getDb();
-  backfillMissingCodes(db);
+  backfillMissingCodes(db, true);
   const rows = db.prepare(EXPORT_ROWS_SQL).all();
   return NextResponse.json(rows);
 }

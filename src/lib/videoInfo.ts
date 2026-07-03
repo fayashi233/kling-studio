@@ -17,7 +17,6 @@ export interface VideoInfoData {
   video_code?: string;
   first_frame_code?: string;
   last_frame_code?: string;
-  original_image_code?: string;
   image_source?: string;
   image_tool?: string;
   video_tool?: string;
@@ -59,7 +58,6 @@ export function buildVideoInfoText(info: VideoInfoData): string {
     line("尾帧", info.last_frame_image),
     line("首帧图片编号", info.first_frame_code),
     line("尾帧图片编号", info.last_frame_code),
-    line("原图编号", info.original_image_code),
     line("输入图片来源", info.image_source),
     line("图片合成工具", info.image_tool),
     line("视频合成工具", info.video_tool),

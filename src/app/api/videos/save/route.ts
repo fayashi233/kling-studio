@@ -52,7 +52,6 @@ export async function POST(req: NextRequest) {
           g.video_code,
           g.first_frame_code,
           g.last_frame_code,
-          g.original_image_code,
           g.image_source,
           g.image_tool,
           g.video_tool,

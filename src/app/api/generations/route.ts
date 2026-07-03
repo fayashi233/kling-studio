@@ -25,7 +25,6 @@ export async function PATCH(req: NextRequest) {
       "video_code",
       "first_frame_code",
       "last_frame_code",
-      "original_image_code",
       "image_source",
       "image_tool",
       "video_tool",

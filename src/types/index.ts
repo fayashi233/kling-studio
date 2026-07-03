@@ -190,7 +190,6 @@ export interface ExportMetadata {
   video_code: string;
   first_frame_code: string;
   last_frame_code: string;
-  original_image_code: string;
   image_source: string;
   image_tool: string;
   video_tool: string;
@@ -210,7 +209,6 @@ export const DEFAULT_EXPORT_METADATA: ExportMetadata = {
   video_code: "",
   first_frame_code: "",
   last_frame_code: "",
-  original_image_code: "",
   image_source: "",
   image_tool: "",
   video_tool: "可灵-api",

@@ -131,7 +131,6 @@ function ExportMetadataForm({ task }: { task: NonNullable<Task> }) {
         <ReadonlyField label="视频编号" value={metadata.video_code} />
         <ReadonlyField label="首帧编号" value={metadata.first_frame_code} />
         <ReadonlyField label="尾帧编号" value={metadata.last_frame_code} />
-        <Field label="原图编号" value={metadata.original_image_code} onChange={(v) => setField("original_image_code", v)} />
         <Field label="图片来源" value={metadata.image_source} onChange={(v) => setField("image_source", v)} />
         <Field label="图片工具" value={metadata.image_tool} onChange={(v) => setField("image_tool", v)} />
         <Field label="视频工具" value={metadata.video_tool} onChange={(v) => setField("video_tool", v)} />

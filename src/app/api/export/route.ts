@@ -13,7 +13,6 @@ const HEADERS = [
   "视频编号",
   "首帧图片编号",
   "尾帧图片编号",
-  "原图编号",
   "输入图片来源",
   "图片合成工具",
   "视频合成工具",
@@ -42,7 +41,6 @@ interface ExportRow {
   video_code: string;
   first_frame_code: string;
   last_frame_code: string;
-  original_image_code: string;
   image_source: string;
   image_tool: string;
   video_tool: string;
@@ -57,7 +55,9 @@ const EXPORT_ORDER_SQL = `
     COALESCE(g.export_view_type, '') as export_view_type,
     COALESCE(g.export_scene_type, '') as export_scene_type,
     COALESCE(g.export_case_type, '') as export_case_type,
-    COALESCE(g.video_code, '') as video_code
+    COALESCE(g.video_code, '') as video_code,
+    p.reference_image,
+    p.last_frame_image
   FROM generations g
   JOIN prompts p ON p.id = g.prompt_id
   ORDER BY
@@ -80,6 +80,58 @@ function videoExtension(videoUrl: string | null): string {
   return ext || ".mp4";
 }
 
+function extensionFromMime(mime: string | null): string {
+  const type = (mime || "").toLowerCase().split(";")[0].trim();
+  if (type === "image/png") return ".png";
+  if (type === "image/webp") return ".webp";
+  if (type === "image/gif") return ".gif";
+  if (type === "image/bmp") return ".bmp";
+  if (type === "image/jpeg" || type === "image/jpg") return ".jpg";
+  return "";
+}
+
+function extensionFromImageRef(imageRef: string): string {
+  try {
+    const pathname = imageRef.startsWith("http://") || imageRef.startsWith("https://")
+      ? new URL(imageRef).pathname
+      : imageRef.split("?")[0];
+    return path.extname(pathname).toLowerCase() || ".jpg";
+  } catch {
+    return ".jpg";
+  }
+}
+
+async function readExportImage(imageRef: string): Promise<{ data: Buffer; ext: string }> {
+  const trimmed = imageRef.trim();
+  const dataUrlMatch = trimmed.match(/^data:([^;]+);base64,(.+)$/i);
+  if (dataUrlMatch) {
+    return {
+      data: Buffer.from(dataUrlMatch[2], "base64"),
+      ext: extensionFromMime(dataUrlMatch[1]) || ".jpg",
+    };
+  }
+
+  if (trimmed.startsWith("/uploads/")) {
+    const localPath = path.join(process.cwd(), "public", trimmed.replace(/^\/+/, ""));
+    if (!fs.existsSync(localPath)) throw new Error("本地图片文件不存在");
+    return {
+      data: fs.readFileSync(localPath),
+      ext: path.extname(localPath).toLowerCase() || ".jpg",
+    };
+  }
+
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    const res = await fetch(trimmed);
+    if (!res.ok) throw new Error(`远程图片下载失败: ${res.status}`);
+    return {
+      data: Buffer.from(await res.arrayBuffer()),
+      ext: extensionFromMime(res.headers.get("content-type")) || extensionFromImageRef(trimmed),
+    };
+  }
+
+  throw new Error("不支持的图片路径");
+}
+
 function backfillMissingCodes(db: ReturnType<typeof getDb>) {
   const rows = db.prepare(EXPORT_ORDER_SQL).all() as Array<{
     task_id: string;
@@ -87,8 +139,10 @@ function backfillMissingCodes(db: ReturnType<typeof getDb>) {
     export_scene_type: string;
     export_case_type: string;
     video_code: string;
+    reference_image: string | null;
+    last_frame_image: string | null;
   }>;
-  const generated = generateExportCodesForRows(rows);
+  const generated = generateExportCodesForRows(rows, { overwriteExisting: true });
   const update = db.prepare(`
     UPDATE generations
     SET video_code = ?, first_frame_code = ?, last_frame_code = ?
@@ -124,7 +178,6 @@ function buildQuery(scope: string, groupName: string, taskIds: string[]) {
       COALESCE(g.video_code, '') as video_code,
       COALESCE(g.first_frame_code, '') as first_frame_code,
       COALESCE(g.last_frame_code, '') as last_frame_code,
-      COALESCE(g.original_image_code, '') as original_image_code,
       COALESCE(g.image_source, '') as image_source,
       COALESCE(g.image_tool, '') as image_tool,
       COALESCE(g.video_tool, '可灵-api') as video_tool,
@@ -186,7 +239,6 @@ export async function POST(req: NextRequest) {
         row.video_code,
         row.first_frame_code,
         row.last_frame_code,
-        row.original_image_code,
         row.image_source,
         row.image_tool,
         row.video_tool || "可灵-api",
@@ -200,7 +252,9 @@ export async function POST(req: NextRequest) {
       { path: "可灵_视频提示词.xlsx", data: createSimpleXlsx(sheetRows) },
     ];
     const skipped: Array<{ taskId: string; reason: string }> = [];
+    const imageSkipped: Array<{ taskId: string; code: string; image: "first" | "last"; reason: string }> = [];
     const exportedTaskIds: string[] = [];
+    let imageFiles = 0;
 
     for (const row of rows) {
       const view = cleanSegment(row.export_view_type);
@@ -227,6 +281,29 @@ export async function POST(req: NextRequest) {
         path: `${view}/${scene}/${type}/${code}.txt`,
         data: buildVideoInfoText(row),
       });
+      const folder = `${view}/${scene}/${type}`;
+      const imageJobs: Array<{ image: "first" | "last"; code: string; ref: string | null }> = [
+        { image: "first", code: cleanSegment(row.first_frame_code), ref: row.reference_image },
+        { image: "last", code: cleanSegment(row.last_frame_code), ref: row.last_frame_image },
+      ];
+      for (const job of imageJobs) {
+        if (!job.ref || !job.code) continue;
+        try {
+          const image = await readExportImage(job.ref);
+          entries.push({
+            path: `${folder}/${job.code}${image.ext}`,
+            data: image.data,
+          });
+          imageFiles += 1;
+        } catch (err) {
+          imageSkipped.push({
+            taskId: row.task_id,
+            code: job.code,
+            image: job.image,
+            reason: err instanceof Error ? err.message : "图片导出失败",
+          });
+        }
+      }
       exportedTaskIds.push(row.task_id);
     }
 
@@ -247,8 +324,10 @@ export async function POST(req: NextRequest) {
         exportedAt,
         exportedRows: rows.length,
         videoFiles: exportedTaskIds.length,
+        imageFiles,
         exportedTaskIds,
         skipped,
+        imageSkipped,
       }, null, 2),
     });
 

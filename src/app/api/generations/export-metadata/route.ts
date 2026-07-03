@@ -6,7 +6,6 @@ const ALLOWED = [
   "export_view_type",
   "export_scene_type",
   "export_case_type",
-  "original_image_code",
   "image_source",
   "image_tool",
   "video_tool",
@@ -23,7 +22,9 @@ const EXPORT_ORDER_SQL = `
     COALESCE(g.export_view_type, '') as export_view_type,
     COALESCE(g.export_scene_type, '') as export_scene_type,
     COALESCE(g.export_case_type, '') as export_case_type,
-    COALESCE(g.video_code, '') as video_code
+    COALESCE(g.video_code, '') as video_code,
+    p.reference_image,
+    p.last_frame_image
   FROM generations g
   JOIN prompts p ON p.id = g.prompt_id
   ORDER BY
@@ -38,6 +39,8 @@ function regenerateCodes(db: ReturnType<typeof getDb>) {
     export_scene_type: string;
     export_case_type: string;
     video_code: string;
+    reference_image: string | null;
+    last_frame_image: string | null;
   }>;
   const generated = generateExportCodesForRows(rows, { overwriteExisting: true });
   const update = db.prepare(`

@@ -4,6 +4,8 @@ export interface ExportCodeSource {
   export_scene_type?: string | null;
   export_case_type?: string | null;
   video_code?: string | null;
+  reference_image?: string | null;
+  last_frame_image?: string | null;
 }
 
 export interface ExportCodes {
@@ -29,18 +31,24 @@ export function buildExportCode(
   row: ExportCodeSource,
   sequence: number
 ): ExportCodes {
+  const sequenceText = String(sequence).padStart(2, "0");
   const videoCode = [
     viewPrefix(row.export_view_type || ""),
     (row.export_scene_type || "").trim(),
     codeCaseType(row.export_case_type || ""),
-    String(sequence).padStart(2, "0"),
+    sequenceText,
   ].join("-");
 
   return {
     video_code: videoCode,
-    first_frame_code: `${videoCode}_FF`,
-    last_frame_code: `${videoCode}_LF`,
+    first_frame_code: row.reference_image ? `${sequenceText}_FF` : "",
+    last_frame_code: row.last_frame_image ? `${sequenceText}_LF` : "",
   };
+}
+
+function sequenceFromVideoCode(videoCode: string) {
+  const match = videoCode.trim().match(/-(\d+)$/);
+  return match ? match[1].padStart(2, "0") : "";
 }
 
 export function generateExportCodesForRows<T extends ExportCodeSource>(
@@ -53,20 +61,22 @@ export function generateExportCodesForRows<T extends ExportCodeSource>(
     const scene = row.export_scene_type?.trim() || "";
     const caseType = row.export_case_type?.trim() || "";
     if (!view || !scene || !caseType) {
+      const sequence = sequenceFromVideoCode(row.video_code || "");
       return {
         ...row,
         video_code: row.video_code || "",
-        first_frame_code: row.video_code ? `${row.video_code}_FF` : "",
-        last_frame_code: row.video_code ? `${row.video_code}_LF` : "",
+        first_frame_code: row.reference_image && sequence ? `${sequence}_FF` : "",
+        last_frame_code: row.last_frame_image && sequence ? `${sequence}_LF` : "",
       };
     }
 
     if (!options.overwriteExisting && row.video_code?.trim()) {
+      const sequence = sequenceFromVideoCode(row.video_code);
       return {
         ...row,
         video_code: row.video_code,
-        first_frame_code: `${row.video_code}_FF`,
-        last_frame_code: `${row.video_code}_LF`,
+        first_frame_code: row.reference_image && sequence ? `${sequence}_FF` : "",
+        last_frame_code: row.last_frame_image && sequence ? `${sequence}_LF` : "",
       };
     }
 

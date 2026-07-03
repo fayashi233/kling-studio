@@ -16,6 +16,8 @@ export interface ExportTableRow {
   video_url: string | null;
   prompt: string;
   group_name: string;
+  reference_image: string | null;
+  last_frame_image: string | null;
   export_selected: number;
   exported_at: string;
   export_batch_id: string;
@@ -25,7 +27,6 @@ export interface ExportTableRow {
   video_code: string;
   first_frame_code: string;
   last_frame_code: string;
-  original_image_code: string;
   image_source: string;
   image_tool: string;
   video_tool: string;
@@ -50,17 +51,19 @@ const CASE_OPTIONS = [
 ];
 
 const EDITABLE_FIELDS: Array<keyof ExportTableRow> = [
-  "original_image_code",
   "image_source",
   "image_tool",
   "video_tool",
-  "export_view_type",
-  "export_scene_type",
-  "export_case_type",
   "usable",
   "issue_type",
   "issue_description",
   "export_tags",
+];
+
+const CATEGORY_FIELDS: Array<keyof ExportTableRow> = [
+  "export_view_type",
+  "export_scene_type",
+  "export_case_type",
 ];
 
 function groupLabel(groupName: string) {
@@ -367,7 +370,7 @@ export function ExportWorkbench({
               <section key={group} className="border rounded-md overflow-hidden bg-card">
                 <div className="w-full h-8 px-3 flex items-center gap-2 text-left border-b bg-muted/30">
                   <button
-                    className="text-xs font-medium flex-1 text-left truncate"
+                    className="text-xs font-medium text-left truncate max-w-[360px]"
                     onClick={() => setCollapsed((prev) => {
                       const next = new Set(prev);
                       if (next.has(group)) next.delete(group); else next.add(group);
@@ -383,6 +386,7 @@ export function ExportWorkbench({
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => patchRows(groupRows, { export_selected: 0 })}>取消分组</Button>
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => applyBulkCategory(groupRows)}>批量分类</Button>
                   <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => autoNumberRows(groupRows)}>刷新分组编号</Button>
+                  <div className="flex-1" />
                 </div>
                 {!isCollapsed && (
                   <ExportTable rows={groupRows} patchRow={patchRow} optionSets={optionSets} />
@@ -419,16 +423,15 @@ function ExportTable({
           <th className="w-28">分组</th>
           <th className="w-44">视频/任务</th>
           <th className="w-80">视频提示词</th>
-          <th className="w-44">视频编号</th>
-          <th className="w-44">首帧编号</th>
-          <th className="w-44">尾帧编号</th>
-          <th className="w-36">原图编号</th>
-          <th className="w-36">输入图片来源</th>
-          <th className="w-32">图片工具</th>
-          <th className="w-32">视频工具</th>
           <th className="w-44">视角</th>
           <th className="w-44">场景</th>
           <th className="w-52">案例类型</th>
+          <th className="w-44">视频编号</th>
+          <th className="w-44">首帧编号</th>
+          <th className="w-44">尾帧编号</th>
+          <th className="w-36">输入图片来源</th>
+          <th className="w-32">图片工具</th>
+          <th className="w-32">视频工具</th>
           <th className="w-24">是否可用</th>
           <th className="w-32">问题类型</th>
           <th className="w-56">问题描述</th>
@@ -464,44 +467,63 @@ function ExportTable({
             <td>
               <Textarea className="min-h-20 text-[11px]" value={row.prompt} readOnly />
             </td>
+            {CATEGORY_FIELDS.map((field) => (
+              <EditableCell key={field} field={field} row={row} patchRow={patchRow} optionSets={optionSets} />
+            ))}
             <ReadonlyCode value={row.video_code} />
             <ReadonlyCode value={row.first_frame_code} />
             <ReadonlyCode value={row.last_frame_code} />
             {EDITABLE_FIELDS.map((field) => (
-              <td key={field}>
-                {field === "issue_description" ? (
-                  <Textarea
-                    className="min-h-16 text-[11px]"
-                    value={String(row[field] || "")}
-                    onChange={(e) => patchRow(row.task_id, { [field]: e.target.value } as Partial<ExportTableRow>)}
-                  />
-                ) : field === "export_view_type" || field === "export_scene_type" || field === "export_case_type" ? (
-                  <DatalistInput
-                    className="h-7 text-[11px]"
-                    value={String(row[field] || "")}
-                    onChange={(value) => patchRow(row.task_id, { [field]: value } as Partial<ExportTableRow>)}
-                    options={
-                      field === "export_view_type"
-                        ? optionSets.views
-                        : field === "export_scene_type"
-                          ? optionSets.scenes
-                          : optionSets.cases
-                    }
-                    listId={`${field}-${row.task_id}-options`}
-                  />
-                ) : (
-                  <Input
-                    className="h-7 text-[11px]"
-                    value={String(row[field] || "")}
-                    onChange={(e) => patchRow(row.task_id, { [field]: e.target.value } as Partial<ExportTableRow>)}
-                  />
-                )}
-              </td>
+              <EditableCell key={field} field={field} row={row} patchRow={patchRow} optionSets={optionSets} />
             ))}
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function EditableCell({
+  field,
+  row,
+  patchRow,
+  optionSets,
+}: {
+  field: keyof ExportTableRow;
+  row: ExportTableRow;
+  patchRow: (taskId: string, update: Partial<ExportTableRow>) => void;
+  optionSets: { views: string[]; scenes: string[]; cases: string[] };
+}) {
+  return (
+    <td>
+      {field === "issue_description" ? (
+        <Textarea
+          className="min-h-16 text-[11px]"
+          value={String(row[field] || "")}
+          onChange={(e) => patchRow(row.task_id, { [field]: e.target.value } as Partial<ExportTableRow>)}
+        />
+      ) : field === "export_view_type" || field === "export_scene_type" || field === "export_case_type" ? (
+        <DatalistInput
+          className="h-7 text-[11px]"
+          value={String(row[field] || "")}
+          onChange={(value) => patchRow(row.task_id, { [field]: value } as Partial<ExportTableRow>)}
+          options={
+            field === "export_view_type"
+              ? optionSets.views
+              : field === "export_scene_type"
+                ? optionSets.scenes
+                : optionSets.cases
+          }
+          listId={`${field}-${row.task_id}-options`}
+        />
+      ) : (
+        <Input
+          className="h-7 text-[11px]"
+          value={String(row[field] || "")}
+          onChange={(e) => patchRow(row.task_id, { [field]: e.target.value } as Partial<ExportTableRow>)}
+        />
+      )}
+    </td>
   );
 }
 
