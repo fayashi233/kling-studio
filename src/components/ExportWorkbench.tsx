@@ -36,6 +36,18 @@ export interface ExportTableRow {
 
 type FilterMode = "all" | "exported" | "unexported";
 
+const VIEW_OPTIONS = ["vehicle view", "wayside view"];
+const SCENE_OPTIONS = ["Bridges", "Section-区间", "station", "terminal", "Tunnel"];
+const CASE_OPTIONS = [
+  "people_intrusion_case",
+  "tree_intrusion_case",
+  "cow_intrusion_case",
+  "rock_intrusion_case",
+  "fire_intrusion_case",
+  "box_intrusion_case",
+  "car_intrusion_case",
+];
+
 const EDITABLE_FIELDS: Array<keyof ExportTableRow> = [
   "video_code",
   "first_frame_code",
@@ -55,6 +67,19 @@ const EDITABLE_FIELDS: Array<keyof ExportTableRow> = [
 
 function groupLabel(groupName: string) {
   return groupName?.trim() || "未分组";
+}
+
+function uniq(values: string[]) {
+  return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
+}
+
+function viewPrefix(view: string) {
+  if (view === "wayside view") return "W";
+  return "V";
+}
+
+function codeType(caseType: string) {
+  return caseType.endsWith("_case") ? caseType.slice(0, -"_case".length) : caseType;
 }
 
 async function downloadZip(taskIds?: string[]) {
@@ -95,6 +120,12 @@ export function ExportWorkbench({
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
+  const [bulkView, setBulkView] = useState("");
+  const [bulkScene, setBulkScene] = useState("");
+  const [bulkCase, setBulkCase] = useState("");
+  const [extraViews, setExtraViews] = useState<string[]>([]);
+  const [extraScenes, setExtraScenes] = useState<string[]>([]);
+  const [extraCases, setExtraCases] = useState<string[]>([]);
 
   const visibleRows = useMemo(() => {
     return rows.filter((row) => {
@@ -115,23 +146,82 @@ export function ExportWorkbench({
 
   const selectedVisible = visibleRows.filter((row) => !!row.export_selected).length;
   const exportedVisible = visibleRows.filter((row) => !!row.exported_at).length;
+  const optionSets = useMemo(() => ({
+    views: uniq([...VIEW_OPTIONS, ...extraViews, ...rows.map((row) => row.export_view_type)]),
+    scenes: uniq([...SCENE_OPTIONS, ...extraScenes, ...rows.map((row) => row.export_scene_type)]),
+    cases: uniq([...CASE_OPTIONS, ...extraCases, ...rows.map((row) => row.export_case_type)]),
+  }), [extraCases, extraScenes, extraViews, rows]);
 
   const patchRow = (taskId: string, update: Partial<ExportTableRow>) => {
     onRowsChange(rows.map((row) => row.task_id === taskId ? { ...row, ...update } : row));
+    rememberOptions(update);
     setDirty((prev) => new Set(prev).add(taskId));
   };
 
-  const setVisibleSelected = (selected: boolean) => {
-    const visibleIds = new Set(visibleRows.map((row) => row.task_id));
-    onRowsChange(rows.map((row) => visibleIds.has(row.task_id)
-      ? { ...row, export_selected: selected ? 1 : 0 }
-      : row
-    ));
+  const rememberOptions = (update: Partial<ExportTableRow>) => {
+    if (update.export_view_type) setExtraViews((prev) => uniq([...prev, String(update.export_view_type)]));
+    if (update.export_scene_type) setExtraScenes((prev) => uniq([...prev, String(update.export_scene_type)]));
+    if (update.export_case_type) setExtraCases((prev) => uniq([...prev, String(update.export_case_type)]));
+  };
+
+  const patchRows = (targetRows: ExportTableRow[], update: Partial<ExportTableRow>) => {
+    const ids = new Set(targetRows.map((row) => row.task_id));
+    onRowsChange(rows.map((row) => ids.has(row.task_id) ? { ...row, ...update } : row));
+    rememberOptions(update);
     setDirty((prev) => {
       const next = new Set(prev);
-      for (const row of visibleRows) next.add(row.task_id);
+      for (const row of targetRows) next.add(row.task_id);
       return next;
     });
+  };
+
+  const setVisibleSelected = (selected: boolean) => {
+    patchRows(visibleRows, { export_selected: selected ? 1 : 0 });
+  };
+
+  const selectedRows = () => rows.filter((row) => !!row.export_selected);
+
+  const applyBulkCategory = (targetRows: ExportTableRow[]) => {
+    const update: Partial<ExportTableRow> = {};
+    if (bulkView.trim()) update.export_view_type = bulkView.trim();
+    if (bulkScene.trim()) update.export_scene_type = bulkScene.trim();
+    if (bulkCase.trim()) update.export_case_type = bulkCase.trim();
+    if (Object.keys(update).length === 0) {
+      setMessage("请先填写要批量应用的视角、场景或类型");
+      return;
+    }
+    patchRows(targetRows, update);
+    setMessage(`已批量分类 ${targetRows.length} 行`);
+  };
+
+  const autoNumberRows = (targetRows: ExportTableRow[], overwrite = false) => {
+    const counters = new Map<string, number>();
+    const targetIds = new Set(targetRows.map((row) => row.task_id));
+    const nextRows = rows.map((row) => {
+      if (!targetIds.has(row.task_id)) return row;
+      if (!overwrite && row.video_code.trim()) return row;
+      const view = row.export_view_type.trim();
+      const scene = row.export_scene_type.trim();
+      const caseType = row.export_case_type.trim();
+      if (!view || !scene || !caseType) return row;
+      const key = `${view}\u0000${scene}\u0000${caseType}`;
+      const next = (counters.get(key) || 0) + 1;
+      counters.set(key, next);
+      const videoCode = `${viewPrefix(view)}-${scene}-${codeType(caseType)}-${String(next).padStart(2, "0")}`;
+      return {
+        ...row,
+        video_code: videoCode,
+        first_frame_code: `${videoCode}_FF`,
+        last_frame_code: `${videoCode}_LF`,
+      };
+    });
+    onRowsChange(nextRows);
+    setDirty((prev) => {
+      const next = new Set(prev);
+      for (const row of targetRows) next.add(row.task_id);
+      return next;
+    });
+    setMessage(`已自动编号 ${targetRows.length} 行${overwrite ? "（覆盖）" : ""}`);
   };
 
   const persistDirtyRows = async () => {
@@ -198,6 +288,8 @@ export function ExportWorkbench({
           <Button variant={filter === "unexported" ? "default" : "outline"} size="sm" className="h-7 text-xs" onClick={() => setFilter("unexported")}>显示未导出</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setVisibleSelected(true)}>勾选当前</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setVisibleSelected(false)}>取消当前</Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(visibleRows, false)}>自动编号当前</Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(visibleRows, true)}>覆盖编号重算</Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onRefresh}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" />刷新
           </Button>
@@ -211,6 +303,15 @@ export function ExportWorkbench({
       </header>
 
       {message && <div className="px-3 py-1 text-[11px] text-muted-foreground border-b">{message}</div>}
+      <div className="border-b px-3 py-2 flex items-center gap-2 text-[11px] flex-shrink-0">
+        <span className="text-muted-foreground">批量分类</span>
+        <DatalistInput className="w-36" value={bulkView} onChange={setBulkView} options={optionSets.views} listId="bulk-view-options" placeholder="视角" />
+        <DatalistInput className="w-36" value={bulkScene} onChange={setBulkScene} options={optionSets.scenes} listId="bulk-scene-options" placeholder="场景" />
+        <DatalistInput className="w-44" value={bulkCase} onChange={setBulkCase} options={optionSets.cases} listId="bulk-case-options" placeholder="类型" />
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => applyBulkCategory(visibleRows)}>应用到当前筛选</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => applyBulkCategory(selectedRows())}>应用到已勾选</Button>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => autoNumberRows(selectedRows(), false)}>编号已勾选</Button>
+      </div>
 
       <main className="flex-1 overflow-auto">
         <div className="min-w-[2200px] p-3 space-y-3">
@@ -220,21 +321,27 @@ export function ExportWorkbench({
             const exportedCount = groupRows.filter((row) => !!row.exported_at).length;
             return (
               <section key={group} className="border rounded-md overflow-hidden bg-card">
-                <button
-                  className="w-full h-8 px-3 flex items-center gap-2 text-left border-b bg-muted/30"
-                  onClick={() => setCollapsed((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(group)) next.delete(group); else next.add(group);
-                    return next;
-                  })}
-                >
-                  <span className="text-xs font-medium flex-1">{group}</span>
+                <div className="w-full h-8 px-3 flex items-center gap-2 text-left border-b bg-muted/30">
+                  <button
+                    className="text-xs font-medium flex-1 text-left truncate"
+                    onClick={() => setCollapsed((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(group)) next.delete(group); else next.add(group);
+                      return next;
+                    })}
+                  >
+                    {group}
+                  </button>
                   <Badge variant="outline" className="text-[10px]">{groupRows.length} 条</Badge>
                   <Badge variant="secondary" className="text-[10px]">勾选 {selectedCount}</Badge>
                   <Badge variant="secondary" className="text-[10px]">已导出 {exportedCount}</Badge>
-                </button>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => patchRows(groupRows, { export_selected: 1 })}>全选分组</Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => patchRows(groupRows, { export_selected: 0 })}>取消分组</Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => applyBulkCategory(groupRows)}>批量分类</Button>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => autoNumberRows(groupRows, false)}>分组自动编号</Button>
+                </div>
                 {!isCollapsed && (
-                  <ExportTable rows={groupRows} patchRow={patchRow} />
+                  <ExportTable rows={groupRows} patchRow={patchRow} optionSets={optionSets} />
                 )}
               </section>
             );
@@ -253,9 +360,11 @@ export function ExportWorkbench({
 function ExportTable({
   rows,
   patchRow,
+  optionSets,
 }: {
   rows: ExportTableRow[];
   patchRow: (taskId: string, update: Partial<ExportTableRow>) => void;
+  optionSets: { views: string[]; scenes: string[]; cases: string[] };
 }) {
   return (
     <table className="w-full border-collapse text-[11px]">
@@ -319,6 +428,20 @@ function ExportTable({
                     value={String(row[field] || "")}
                     onChange={(e) => patchRow(row.task_id, { [field]: e.target.value } as Partial<ExportTableRow>)}
                   />
+                ) : field === "export_view_type" || field === "export_scene_type" || field === "export_case_type" ? (
+                  <DatalistInput
+                    className="h-7 text-[11px]"
+                    value={String(row[field] || "")}
+                    onChange={(value) => patchRow(row.task_id, { [field]: value } as Partial<ExportTableRow>)}
+                    options={
+                      field === "export_view_type"
+                        ? optionSets.views
+                        : field === "export_scene_type"
+                          ? optionSets.scenes
+                          : optionSets.cases
+                    }
+                    listId={`${field}-options`}
+                  />
                 ) : (
                   <Input
                     className="h-7 text-[11px]"
@@ -332,5 +455,36 @@ function ExportTable({
         ))}
       </tbody>
     </table>
+  );
+}
+
+function DatalistInput({
+  value,
+  onChange,
+  options,
+  listId,
+  className = "",
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  listId: string;
+  className?: string;
+  placeholder?: string;
+}) {
+  return (
+    <>
+      <Input
+        className={className}
+        value={value}
+        list={listId}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <datalist id={listId}>
+        {options.map((option) => <option key={option} value={option} />)}
+      </datalist>
+    </>
   );
 }
