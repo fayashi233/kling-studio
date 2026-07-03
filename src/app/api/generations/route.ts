@@ -16,7 +16,27 @@ export async function PATCH(req: NextRequest) {
     if (!taskId) return NextResponse.json({ error: "taskId required" }, { status: 400 });
 
     const db = getDb();
-    const allowed = ["quality", "reject_reason"];
+    const allowed = [
+      "quality",
+      "reject_reason",
+      "export_view_type",
+      "export_scene_type",
+      "export_case_type",
+      "video_code",
+      "first_frame_code",
+      "last_frame_code",
+      "original_image_code",
+      "image_source",
+      "image_tool",
+      "video_tool",
+      "usable",
+      "issue_type",
+      "issue_description",
+      "export_tags",
+      "export_selected",
+      "exported_at",
+      "export_batch_id",
+    ];
     const setClauses: string[] = [];
     const values: unknown[] = [];
 

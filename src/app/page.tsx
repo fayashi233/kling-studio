@@ -12,10 +12,12 @@ import { TaskHistory } from "@/components/TaskHistory";
 import { VersionTimeline } from "@/components/VersionTimeline";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { BatchImport } from "@/components/BatchImport";
+import { ExportMetadataPanel } from "@/components/ExportMetadataPanel";
+import { ExportWorkbench, type ExportTableRow } from "@/components/ExportWorkbench";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Film, History, Sparkles, ImageIcon, FolderOpen, GitBranch } from "lucide-react";
+import { Download, Film, History, Sparkles, ImageIcon, FolderOpen, GitBranch } from "lucide-react";
 import type { ModelName, Mode, Duration, AspectRatio } from "@/types";
 
 function useResizable(init: number, min: number, max: number, invert = false) {
@@ -64,6 +66,9 @@ export default function HomePage() {
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportRows, setExportRows] = useState<ExportTableRow[]>([]);
+  const [exportLoading, setExportLoading] = useState(false);
   const {
     params, currentImage, currentLastFrame, isGenerating, setIsGenerating,
     setCurrentTask, addToHistory, updateHistoryTask,
@@ -80,7 +85,7 @@ export default function HomePage() {
   const rightPanel = useResizable(360, 240, 600, true);
 
   // Load prompt and find associated video
-  const handleLoadPrompt = useCallback((p: { id: string; prompt: string; negative_prompt: string; model_name: string; mode: string; duration: string; aspect_ratio: string; cfg_scale: number; reference_image: string | null }) => {
+  const handleLoadPrompt = useCallback((p: { id: string; prompt: string; negative_prompt: string; model_name: string; mode: string; duration: string; aspect_ratio: string; cfg_scale: number; reference_image: string | null; last_frame_image?: string | null }) => {
     // Track which prompt we're editing
     useAppStore.getState().setCurrentPromptId(p.id);
     // Load prompt params
@@ -95,7 +100,10 @@ export default function HomePage() {
     });
     if (p.reference_image) {
       useAppStore.getState().setCurrentImage(p.reference_image);
+    } else {
+      useAppStore.getState().setCurrentImage(null);
     }
+    useAppStore.getState().setCurrentLastFrame(p.last_frame_image || null);
 
     // Find latest generation for this prompt
     const matchingTask = history.find((t) => t.promptId === p.id);
@@ -132,6 +140,25 @@ export default function HomePage() {
             startedAt: new Date(g.created_at as string).getTime(),
             quality: (g.quality as string) || undefined,
             rejectReason: (g.reject_reason as string) || undefined,
+            exportMetadata: {
+              export_view_type: (g.export_view_type as string) || "",
+              export_scene_type: (g.export_scene_type as string) || "",
+              export_case_type: (g.export_case_type as string) || "",
+              video_code: (g.video_code as string) || "",
+              first_frame_code: (g.first_frame_code as string) || "",
+              last_frame_code: (g.last_frame_code as string) || "",
+              original_image_code: (g.original_image_code as string) || "",
+              image_source: (g.image_source as string) || "",
+              image_tool: (g.image_tool as string) || "",
+              video_tool: (g.video_tool as string) || "可灵-api",
+              usable: (g.usable as string) || "",
+              issue_type: (g.issue_type as string) || "",
+              issue_description: (g.issue_description as string) || "",
+              export_tags: (g.export_tags as string) || "",
+              export_selected: Number(g.export_selected || 0),
+              exported_at: (g.exported_at as string) || "",
+              export_batch_id: (g.export_batch_id as string) || "",
+            },
           }));
           setHistory(restored);
           for (const g of restored) {
@@ -204,7 +231,7 @@ export default function HomePage() {
 
   // ── Batch ──
   const handleBatchGenerate = useCallback(
-    async (prompts: Array<{ prompt: string; negative_prompt: string; model_name: string; mode: string; duration: string; aspect_ratio: string; cfg_scale: number; reference_image: string | null }>) => {
+    async (prompts: Array<{ prompt: string; negative_prompt: string; model_name: string; mode: string; duration: string; aspect_ratio: string; cfg_scale: number; reference_image: string | null; last_frame_image?: string | null }>) => {
       setBatchProgress({ current: 0, total: prompts.length });
       for (let i = 0; i < prompts.length; i++) {
         const p = prompts[i];
@@ -213,7 +240,7 @@ export default function HomePage() {
           const res = await fetch("/api/kling/generate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ params: { model_name: p.model_name, prompt: p.prompt, negative_prompt: p.negative_prompt, mode: p.mode, duration: p.duration, aspect_ratio: p.aspect_ratio, cfg_scale: p.cfg_scale }, image: p.reference_image || undefined }),
+            body: JSON.stringify({ params: { model_name: p.model_name, prompt: p.prompt, negative_prompt: p.negative_prompt, mode: p.mode, duration: p.duration, aspect_ratio: p.aspect_ratio, cfg_scale: p.cfg_scale }, image: p.reference_image || undefined, lastFrame: p.last_frame_image || undefined }),
           });
           const data = await res.json();
           if (data.taskId) {
@@ -261,19 +288,78 @@ export default function HomePage() {
         aspect_ratio: params.aspect_ratio,
         cfg_scale: params.cfg_scale,
         reference_image: currentImage || null,
+        last_frame_image: currentLastFrame || "",
         group_name: activeGroup || "",
       }),
     });
     // Refresh prompts
     const res = await fetch("/api/prompts");
     setSavedPrompts(await res.json());
-  }, [params, currentImage, activeGroup, setSavedPrompts]);
+  }, [params, currentImage, currentLastFrame, activeGroup, setSavedPrompts]);
 
   // ── Generate and switch to video tab ──
   const handleGenerateAndSwitch = useCallback(async () => {
     await handleGenerate();
     setRightTab("video");
   }, [handleGenerate]);
+
+  const refreshExportRows = useCallback(async () => {
+    const res = await fetch("/api/export/rows");
+    const data = await res.json();
+    if (Array.isArray(data)) setExportRows(data);
+  }, []);
+
+  const openExportWorkbench = useCallback(async () => {
+    setExportLoading(true);
+    try {
+      await refreshExportRows();
+      setExportOpen(true);
+    } catch (err) {
+      alert("加载导出表失败: " + (err as Error).message);
+    } finally {
+      setExportLoading(false);
+    }
+  }, [refreshExportRows]);
+
+  const handleExportRowsChange = useCallback((rows: ExportTableRow[]) => {
+    setExportRows(rows);
+    const current = useAppStore.getState().currentTask;
+    if (!current) return;
+    const row = rows.find((item) => item.task_id === current.taskId);
+    if (!row) return;
+    updateHistoryTask(current.taskId, {
+      exportMetadata: {
+        export_view_type: row.export_view_type,
+        export_scene_type: row.export_scene_type,
+        export_case_type: row.export_case_type,
+        video_code: row.video_code,
+        first_frame_code: row.first_frame_code,
+        last_frame_code: row.last_frame_code,
+        original_image_code: row.original_image_code,
+        image_source: row.image_source,
+        image_tool: row.image_tool,
+        video_tool: row.video_tool,
+        usable: row.usable,
+        issue_type: row.issue_type,
+        issue_description: row.issue_description,
+        export_tags: row.export_tags,
+        export_selected: row.export_selected,
+        exported_at: row.exported_at,
+        export_batch_id: row.export_batch_id,
+      },
+    });
+  }, [updateHistoryTask]);
+
+  if (exportOpen) {
+    return (
+      <ExportWorkbench
+        rows={exportRows}
+        onRowsChange={handleExportRowsChange}
+        onBack={() => setExportOpen(false)}
+        onRefresh={refreshExportRows}
+      />
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col">
@@ -301,6 +387,10 @@ export default function HomePage() {
 <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
             onClick={() => fetch("/api/videos/open", { method: "POST" }).catch(() => {})}>
             <FolderOpen className="h-3 w-3 mr-1" />视频文件夹
+          </Button>
+          <Button variant="default" size="sm" className="h-6 px-2 text-[10px]"
+            onClick={openExportWorkbench} disabled={exportLoading}>
+            <Download className="h-3 w-3 mr-1" />导出
           </Button>
           {isGenerating && <Badge variant="secondary" className="text-[10px] animate-pulse bg-yellow-500/20 text-yellow-700">生成中...</Badge>}
           {llmLoading && <Badge variant="secondary" className="text-[10px] animate-pulse bg-blue-500/20 text-blue-700">AI 处理中...</Badge>}
@@ -349,6 +439,7 @@ export default function HomePage() {
                       aspect_ratio: params.aspect_ratio,
                       cfg_scale: params.cfg_scale,
                       reference_image: currentImage || null,
+                      last_frame_image: currentLastFrame || "",
                       group_name: activeGroup || "",
                     }),
                   });
@@ -403,10 +494,14 @@ export default function HomePage() {
           <Tabs value={rightTab} onValueChange={setRightTab} className="h-full flex flex-col">
             <TabsList className="w-full rounded-none border-b flex-shrink-0 h-8">
               <TabsTrigger value="video" className="flex-1 text-[11px] rounded-none"><Film className="h-3 w-3 mr-1" />视频预览</TabsTrigger>
+              <TabsTrigger value="export" className="flex-1 text-[11px] rounded-none"><Download className="h-3 w-3 mr-1" />标注</TabsTrigger>
               <TabsTrigger value="versions" className="flex-1 text-[11px] rounded-none"><GitBranch className="h-3 w-3 mr-1" />版本</TabsTrigger>
               <TabsTrigger value="history" className="flex-1 text-[11px] rounded-none"><History className="h-3 w-3 mr-1" />历史</TabsTrigger>
             </TabsList>
             <TabsContent value="video" className="flex-1 m-0 min-h-0"><VideoPlayer /></TabsContent>
+            <TabsContent value="export" className="flex-1 m-0 min-h-0">
+              <ExportMetadataPanel />
+            </TabsContent>
             <TabsContent value="versions" className="flex-1 m-0 min-h-0">
               <VersionTimeline
                 promptId={currentPromptId}
@@ -420,9 +515,12 @@ export default function HomePage() {
                     aspect_ratio: (v.aspect_ratio || "16:9") as AspectRatio,
                     cfg_scale: v.cfg_scale || 0.5,
                   });
+                  useAppStore.getState().setCurrentImage(v.reference_image || null);
+                  useAppStore.getState().setCurrentLastFrame(v.last_frame_image || null);
                   setCurrentVersionId(v.id);
                   if (v.task_id) {
-                    useAppStore.getState().setCurrentTask({
+                    const matchingTask = history.find((task) => task.taskId === v.task_id);
+                    useAppStore.getState().setCurrentTask(matchingTask || {
                       id: v.id,
                       promptId: "",
                       taskId: v.task_id,

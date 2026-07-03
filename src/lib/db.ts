@@ -32,6 +32,7 @@ function initSchema(db: Database.Database) {
       aspect_ratio TEXT DEFAULT '16:9',
       cfg_scale REAL DEFAULT 0.5,
       reference_image TEXT,
+      last_frame_image TEXT DEFAULT '',
       is_favorite INTEGER DEFAULT 0,
       tags TEXT DEFAULT '',
       group_name TEXT DEFAULT '',
@@ -46,6 +47,23 @@ function initSchema(db: Database.Database) {
       video_url TEXT,
       error_msg TEXT,
       duration_ms INTEGER,
+      export_view_type TEXT DEFAULT '',
+      export_scene_type TEXT DEFAULT '',
+      export_case_type TEXT DEFAULT '',
+      video_code TEXT DEFAULT '',
+      first_frame_code TEXT DEFAULT '',
+      last_frame_code TEXT DEFAULT '',
+      original_image_code TEXT DEFAULT '',
+      image_source TEXT DEFAULT '',
+      image_tool TEXT DEFAULT '',
+      video_tool TEXT DEFAULT '可灵-api',
+      usable TEXT DEFAULT '',
+      issue_type TEXT DEFAULT '',
+      issue_description TEXT DEFAULT '',
+      export_tags TEXT DEFAULT '',
+      export_selected INTEGER DEFAULT 0,
+      exported_at TEXT DEFAULT '',
+      export_batch_id TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (prompt_id) REFERENCES prompts(id)
     );
@@ -75,6 +93,7 @@ function initSchema(db: Database.Database) {
       aspect_ratio TEXT DEFAULT '',
       cfg_scale REAL DEFAULT 0.5,
       reference_image TEXT DEFAULT '',
+      last_frame_image TEXT DEFAULT '',
       task_id TEXT DEFAULT '',
       video_url TEXT DEFAULT '',
       task_status TEXT DEFAULT '',
@@ -106,11 +125,30 @@ function migrateSchema(db: Database.Database) {
     }
   };
   addColumnIfMissing("prompts", "group_name", "TEXT DEFAULT ''");
+  addColumnIfMissing("prompts", "last_frame_image", "TEXT DEFAULT ''");
   addColumnIfMissing("images", "base64_data", "TEXT DEFAULT ''");
   addColumnIfMissing("prompt_versions", "prompt_id", "TEXT DEFAULT ''");
+  addColumnIfMissing("prompt_versions", "last_frame_image", "TEXT DEFAULT ''");
   // Index for prompt_id lookups
   db.exec(`CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt_id ON prompt_versions(prompt_id)`);
   addColumnIfMissing("generations", "task_type", "TEXT DEFAULT ''");
   addColumnIfMissing("generations", "quality", "TEXT DEFAULT ''");
   addColumnIfMissing("generations", "reject_reason", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "export_view_type", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "export_scene_type", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "export_case_type", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "video_code", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "first_frame_code", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "last_frame_code", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "original_image_code", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "image_source", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "image_tool", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "video_tool", "TEXT DEFAULT '可灵-api'");
+  addColumnIfMissing("generations", "usable", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "issue_type", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "issue_description", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "export_tags", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "export_selected", "INTEGER DEFAULT 0");
+  addColumnIfMissing("generations", "exported_at", "TEXT DEFAULT ''");
+  addColumnIfMissing("generations", "export_batch_id", "TEXT DEFAULT ''");
 }

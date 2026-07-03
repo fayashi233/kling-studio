@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
       // Iterating on an existing prompt — update it with latest params
       promptId = inputPromptId;
       db.prepare(
-        `UPDATE prompts SET prompt=?, negative_prompt=?, model_name=?, mode=?, duration=?, aspect_ratio=?, cfg_scale=?, reference_image=?, group_name=?
+        `UPDATE prompts SET prompt=?, negative_prompt=?, model_name=?, mode=?, duration=?, aspect_ratio=?, cfg_scale=?, reference_image=?, last_frame_image=?, group_name=?
          WHERE id=?`
       ).run(
         params.prompt,
@@ -191,6 +191,7 @@ export async function POST(req: NextRequest) {
         params.aspect_ratio,
         params.cfg_scale,
         image || null,
+        lastFrame || "",
         groupName || "",
         promptId
       );
@@ -198,8 +199,8 @@ export async function POST(req: NextRequest) {
       // New prompt — insert fresh record
       promptId = uuidv4();
       db.prepare(
-        `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, group_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, last_frame_image, group_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         promptId,
         params.prompt,
@@ -210,6 +211,7 @@ export async function POST(req: NextRequest) {
         params.aspect_ratio,
         params.cfg_scale,
         image || null,
+        lastFrame || "",
         groupName || ""
       );
     }
@@ -224,8 +226,8 @@ export async function POST(req: NextRequest) {
     // Create version record
     const versionId = uuidv4();
     db.prepare(
-      `INSERT INTO prompt_versions (id, parent_id, prompt_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, task_id, task_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')`
+      `INSERT INTO prompt_versions (id, parent_id, prompt_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, last_frame_image, task_id, task_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted')`
     ).run(
       versionId,
       parentId || "",
@@ -238,6 +240,7 @@ export async function POST(req: NextRequest) {
       params.aspect_ratio,
       params.cfg_scale,
       image || null,
+      lastFrame || "",
       taskId
     );
 

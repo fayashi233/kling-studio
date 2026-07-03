@@ -129,6 +129,8 @@ export function Sidebar({
         cfg_scale: p.cfg_scale,
       });
       if (p.reference_image) useAppStore.getState().setCurrentImage(p.reference_image);
+      else useAppStore.getState().setCurrentImage(null);
+      useAppStore.getState().setCurrentLastFrame(p.last_frame_image || null);
     }
   };
 

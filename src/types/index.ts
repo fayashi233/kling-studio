@@ -123,6 +123,7 @@ export interface PromptRecord {
   aspect_ratio: AspectRatio;
   cfg_scale: number;
   reference_image: string | null;
+  last_frame_image: string | null;
   is_favorite: boolean;
   tags: string;
   group_name: string;
@@ -143,6 +144,7 @@ export interface PromptVersionRecord {
   aspect_ratio: string;
   cfg_scale: number;
   reference_image: string;
+  last_frame_image: string;
   task_id: string;
   video_url: string;
   task_status: string;
@@ -162,7 +164,61 @@ export interface GenerationRecord {
   created_at: string;
   quality: string;
   reject_reason: string;
+  export_view_type: string;
+  export_scene_type: string;
+  export_case_type: string;
+  video_code: string;
+  first_frame_code: string;
+  last_frame_code: string;
+  original_image_code: string;
+  image_source: string;
+  image_tool: string;
+  video_tool: string;
+  usable: string;
+  issue_type: string;
+  issue_description: string;
+  export_tags: string;
+  export_selected: number;
+  exported_at: string;
+  export_batch_id: string;
 }
+
+export interface ExportMetadata {
+  export_view_type: string;
+  export_scene_type: string;
+  export_case_type: string;
+  video_code: string;
+  first_frame_code: string;
+  last_frame_code: string;
+  original_image_code: string;
+  image_source: string;
+  image_tool: string;
+  video_tool: string;
+  usable: string;
+  issue_type: string;
+  issue_description: string;
+  export_tags: string;
+  export_selected?: number;
+  exported_at?: string;
+  export_batch_id?: string;
+}
+
+export const DEFAULT_EXPORT_METADATA: ExportMetadata = {
+  export_view_type: "",
+  export_scene_type: "",
+  export_case_type: "",
+  video_code: "",
+  first_frame_code: "",
+  last_frame_code: "",
+  original_image_code: "",
+  image_source: "",
+  image_tool: "",
+  video_tool: "可灵-api",
+  usable: "",
+  issue_type: "",
+  issue_description: "",
+  export_tags: "",
+};
 
 export interface ImageRecord {
   id: string;

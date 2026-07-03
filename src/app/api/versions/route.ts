@@ -39,8 +39,8 @@ export async function POST(req: NextRequest) {
     const id = uuidv4();
 
     db.prepare(
-      `INSERT INTO prompt_versions (id, parent_id, prompt_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, task_id, video_url, task_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO prompt_versions (id, parent_id, prompt_id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, last_frame_image, task_id, video_url, task_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       body.parent_id || "",
@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
       body.aspect_ratio || "",
       body.cfg_scale ?? 0.5,
       body.reference_image || "",
+      body.last_frame_image || "",
       body.task_id || "",
       body.video_url || "",
       body.task_status || "submitted"
@@ -71,7 +72,7 @@ export async function PATCH(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
     const db = getDb();
-    const allowed = ["task_id", "video_url", "task_status"];
+    const allowed = ["task_id", "video_url", "task_status", "last_frame_image"];
     const setClauses: string[] = [];
     const values: unknown[] = [];
 

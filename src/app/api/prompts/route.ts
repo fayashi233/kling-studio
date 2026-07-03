@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
   const id = uuidv4();
 
   db.prepare(
-    `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, is_favorite, tags, group_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO prompts (id, prompt, negative_prompt, model_name, mode, duration, aspect_ratio, cfg_scale, reference_image, last_frame_image, is_favorite, tags, group_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     body.prompt,
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
     body.aspect_ratio || "16:9",
     body.cfg_scale ?? 0.5,
     body.reference_image || null,
+    body.last_frame_image || "",
     body.is_favorite ? 1 : 0,
     body.tags || "",
     body.group_name || ""
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest) {
 
   const allowedKeys = [
     "prompt", "negative_prompt", "model_name", "mode", "duration",
-    "aspect_ratio", "cfg_scale", "reference_image", "tags", "group_name",
+    "aspect_ratio", "cfg_scale", "reference_image", "last_frame_image", "tags", "group_name",
   ];
 
   for (const [key, value] of Object.entries(updates)) {

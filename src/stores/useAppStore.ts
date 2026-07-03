@@ -10,6 +10,7 @@ import type {
   ImageRecord,
   AppSettings,
   ElementRecord,
+  ExportMetadata,
 } from "@/types";
 
 interface GenerationTask {
@@ -22,6 +23,7 @@ interface GenerationTask {
   startedAt: number;
   quality?: string;
   rejectReason?: string;
+  exportMetadata?: Partial<ExportMetadata>;
 }
 
 interface AppState {
