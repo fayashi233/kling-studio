@@ -470,9 +470,15 @@ function ExportTable({
             {CATEGORY_FIELDS.map((field) => (
               <EditableCell key={field} field={field} row={row} patchRow={patchRow} optionSets={optionSets} />
             ))}
-            <ReadonlyCode value={row.video_code} />
-            <ReadonlyCode value={row.first_frame_code} />
-            <ReadonlyCode value={row.last_frame_code} />
+            <ReadonlyCode value={row.video_code} placeholder="分类完整后自动生成" />
+            <ReadonlyCode
+              value={row.first_frame_code}
+              placeholder={row.reference_image ? "按图片文件名自动生成" : "无首帧图片"}
+            />
+            <ReadonlyCode
+              value={row.last_frame_code}
+              placeholder={row.last_frame_image ? "按图片文件名自动生成" : "无尾帧"}
+            />
             {EDITABLE_FIELDS.map((field) => (
               <EditableCell key={field} field={field} row={row} patchRow={patchRow} optionSets={optionSets} />
             ))}
@@ -527,11 +533,11 @@ function EditableCell({
   );
 }
 
-function ReadonlyCode({ value }: { value: string }) {
+function ReadonlyCode({ value, placeholder }: { value: string; placeholder: string }) {
   return (
     <td>
       <div className="min-h-7 rounded border bg-muted/30 px-2 py-1 text-[11px] break-all text-muted-foreground">
-        {value || "分类完整后自动生成"}
+        {value || placeholder}
       </div>
     </td>
   );
