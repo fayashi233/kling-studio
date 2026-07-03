@@ -10,11 +10,22 @@ export async function GET(req: NextRequest) {
   let versions;
   if (promptId) {
     versions = db
-      .prepare(`SELECT * FROM prompt_versions WHERE prompt_id = ? ORDER BY created_at ASC`)
+      .prepare(
+        `SELECT pv.*, g.quality, g.reject_reason
+         FROM prompt_versions pv
+         LEFT JOIN generations g ON g.task_id = pv.task_id
+         WHERE pv.prompt_id = ?
+         ORDER BY pv.created_at ASC`
+      )
       .all(promptId);
   } else {
     versions = db
-      .prepare(`SELECT * FROM prompt_versions ORDER BY created_at DESC LIMIT 200`)
+      .prepare(
+        `SELECT pv.*, g.quality, g.reject_reason
+         FROM prompt_versions pv
+         LEFT JOIN generations g ON g.task_id = pv.task_id
+         ORDER BY pv.created_at DESC LIMIT 200`
+      )
       .all();
   }
   return NextResponse.json(versions);

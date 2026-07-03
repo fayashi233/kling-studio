@@ -20,6 +20,8 @@ interface GenerationTask {
   videoUrl?: string;
   errorMsg?: string;
   startedAt: number;
+  quality?: string;
+  rejectReason?: string;
 }
 
 interface AppState {

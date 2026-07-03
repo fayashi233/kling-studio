@@ -104,7 +104,7 @@ function buildRequestBody(
   }
 
   if (elementIds && elementIds.length > 0) {
-    input.element_list = elementIds.map(id => ({ element_id: Number(id) }));
+    input.element_list = elementIds.map(id => ({ element_id: String(id) }));
   }
 
   return { model, input, parameters };

@@ -130,6 +130,8 @@ export default function HomePage() {
             videoUrl: g.video_url as string | undefined,
             errorMsg: g.error_msg as string | undefined,
             startedAt: new Date(g.created_at as string).getTime(),
+            quality: (g.quality as string) || undefined,
+            rejectReason: (g.reject_reason as string) || undefined,
           }));
           setHistory(restored);
           for (const g of restored) {

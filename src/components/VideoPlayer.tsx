@@ -2,8 +2,16 @@
 
 import { useAppStore } from "@/stores/useAppStore";
 import { Button } from "@/components/ui/button";
-import { Download, Maximize2, RefreshCw, AlertCircle, Copy, Check } from "lucide-react";
+import { Download, Maximize2, RefreshCw, AlertCircle, Copy, Check, ThumbsDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import { REJECT_REASONS, REJECT_REASON_LABELS, type RejectReason } from "@/types";
 import { useState } from "react";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -46,6 +54,38 @@ export function VideoPlayer() {
   const errorMsg = currentTask?.errorMsg;
   const statusInfo = status ? STATUS_LABELS[status] : null;
   const errorHint = errorMsg ? getErrorHint(errorMsg) : "";
+
+  const quality = currentTask?.quality;
+  const rejectReason = currentTask?.rejectReason;
+  const isBad = quality === "bad";
+
+  const handleMarkBad = async (reason: string) => {
+    const taskId = currentTask?.taskId;
+    if (!taskId) return;
+    useAppStore.getState().updateHistoryTask(taskId, {
+      quality: "bad",
+      rejectReason: reason,
+    });
+    fetch("/api/generations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId, quality: "bad", reject_reason: reason }),
+    }).catch(() => {});
+  };
+
+  const handleClearQuality = async () => {
+    const taskId = currentTask?.taskId;
+    if (!taskId) return;
+    useAppStore.getState().updateHistoryTask(taskId, {
+      quality: "",
+      rejectReason: undefined,
+    });
+    fetch("/api/generations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taskId, quality: "", reject_reason: "" }),
+    }).catch(() => {});
+  };
 
   const copyError = () => {
     if (errorMsg) {
@@ -140,6 +180,11 @@ export function VideoPlayer() {
                 {statusInfo.label}
               </Badge>
             )}
+            {isBad && rejectReason && (
+              <span className="text-[10px] text-red-600">
+                不可用 · {REJECT_REASON_LABELS[rejectReason as RejectReason] || rejectReason}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground truncate max-w-[200px]">
               {currentTask.taskId.slice(0, 16)}
             </span>
@@ -147,6 +192,37 @@ export function VideoPlayer() {
           <div className="flex gap-1">
             {videoUrl && (
               <>
+                {isBad ? (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 text-[10px]"
+                    onClick={handleClearQuality}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5 mr-1 fill-current" />
+                    已标记
+                  </Button>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger>
+                      <Button variant="ghost" size="sm" className="h-7 text-[10px]">
+                        <ThumbsDown className="h-3.5 w-3.5 mr-1" />标记
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-40">
+                      <DropdownMenuLabel>选择不可用原因</DropdownMenuLabel>
+                      {REJECT_REASONS.map((reason) => (
+                        <DropdownMenuItem
+                          key={reason}
+                          onClick={() => handleMarkBad(reason)}
+                          className="text-xs"
+                        >
+                          {REJECT_REASON_LABELS[reason]}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <Button variant="ghost" size="sm" className="h-7"
                   onClick={() => window.open(videoUrl, "_blank")}>
                   <Download className="h-3.5 w-3.5 mr-1" />下载

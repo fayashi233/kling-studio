@@ -4,7 +4,9 @@ import { useAppStore } from "@/stores/useAppStore";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Play, RefreshCw } from "lucide-react";
+import { Play, RefreshCw, ThumbsDown } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { REJECT_REASON_LABELS, type RejectReason } from "@/types";
 
 const STATUS_COLORS: Record<string, string> = {
   submitted: "bg-blue-500",
@@ -69,6 +71,16 @@ export function TaskHistory({ onSwitchToVideo }: { onSwitchToVideo?: () => void 
                 <Badge variant="secondary" className="text-[10px] px-1 py-0">
                   {STATUS_LABELS[task.status] || task.status}
                 </Badge>
+                {task.quality === "bad" && task.rejectReason && (
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <ThumbsDown className="h-3 w-3 text-red-500" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>不可用 · {REJECT_REASON_LABELS[task.rejectReason as RejectReason] || task.rejectReason}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <span className="text-[10px] text-muted-foreground truncate flex-1">
                   {task.taskId.slice(0, 12)}
                 </span>

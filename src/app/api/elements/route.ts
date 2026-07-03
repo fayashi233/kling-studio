@@ -51,7 +51,7 @@ export async function GET() {
         const coverUrl = el.cover?.resource || "";
         insertStmt.run(
           uuidv4(),
-          el.element_id,
+          String(el.element_id),
           el.element_name,
           coverUrl,
           el.element_description || "",
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
       const id = uuidv4();
       db.prepare(
         "INSERT INTO elements (id, api_element_id, name, cover_url, description, tag, provider) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      ).run(id, manualId.trim(), name, url || "", description, tag, settings.provider);
+      ).run(id, String(manualId.trim()), name, url || "", description, tag, settings.provider);
       return NextResponse.json({ id, api_element_id: manualId.trim(), name });
     }
 
@@ -167,11 +167,11 @@ export async function POST(req: NextRequest) {
     const resultCoverUrl = result.cover?.resource || coverUrl;
     db.prepare(
       "INSERT INTO elements (id, api_element_id, name, cover_url, description, tag, provider) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(localId, result.element_id, result.element_name, resultCoverUrl, result.element_description || description, tag, "kling-official");
+    ).run(localId, String(result.element_id), result.element_name, resultCoverUrl, result.element_description || description, tag, "kling-official");
 
     return NextResponse.json({
       id: localId,
-      api_element_id: result.element_id,
+      api_element_id: String(result.element_id),
       name: result.element_name,
       cover_url: resultCoverUrl,
       description: result.element_description,

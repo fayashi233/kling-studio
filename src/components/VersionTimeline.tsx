@@ -5,7 +5,8 @@ import { useAppStore } from "@/stores/useAppStore";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { GitBranch, Play, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { GitBranch, Play, Clock, CheckCircle2, XCircle, Loader2, ThumbsDown } from "lucide-react";
+import { REJECT_REASON_LABELS, type RejectReason } from "@/types";
 import type { PromptVersionRecord } from "@/types";
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -81,6 +82,7 @@ export function VersionTimeline({
         {tree.map((v, i) => {
           const isActive = activeId === v.id;
           const hasVideo = v.video_url && v.task_status === "succeed";
+          const isBad = hasVideo && v.quality === "bad";
           const isBranch = v.parent_id && tree.some((t) => t.id === v.parent_id);
 
           return (
@@ -89,6 +91,7 @@ export function VersionTimeline({
               <div className="flex flex-col items-center w-5 flex-shrink-0">
                 <div className={`w-2.5 h-2.5 rounded-full border-2 flex-shrink-0 ${
                   isActive ? "border-primary bg-primary" :
+                  isBad ? "border-orange-500 bg-orange-500" :
                   hasVideo ? "border-green-500 bg-green-500" :
                   v.task_status === "failed" ? "border-red-500 bg-red-500" :
                   "border-muted-foreground/30 bg-background"
@@ -110,7 +113,11 @@ export function VersionTimeline({
                 onClick={() => handleSelect(v)}
               >
                 <div className="flex items-center gap-1.5 mb-1">
-                  {STATUS_ICON[v.task_status] || <Clock className="h-3 w-3 text-muted-foreground" />}
+                  {isBad ? (
+                    <ThumbsDown className="h-3 w-3 text-orange-500" />
+                  ) : (
+                    STATUS_ICON[v.task_status] || <Clock className="h-3 w-3 text-muted-foreground" />
+                  )}
                   <span className="text-[10px] text-muted-foreground">
                     {new Date(v.created_at).toLocaleTimeString()}
                   </span>
@@ -118,6 +125,11 @@ export function VersionTimeline({
                     <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 text-orange-600 border-orange-300">
                       分支
                     </Badge>
+                  )}
+                  {isBad && v.reject_reason && (
+                    <span className="text-[9px] text-red-600">
+                      不可用 · {REJECT_REASON_LABELS[v.reject_reason as RejectReason] || v.reject_reason}
+                    </span>
                   )}
                   {hasVideo && (
                     <Button variant="ghost" size="sm" className="h-4 w-4 p-0 ml-auto"

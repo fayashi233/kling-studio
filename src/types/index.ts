@@ -76,6 +76,32 @@ export interface KlingImageParams extends KlingParams {
 
 export type TaskStatus = "submitted" | "processing" | "succeed" | "failed";
 
+// ──── Quality / Rejection ────
+export const REJECT_REASONS = [
+  "corruption", "deformation", "blank_frame", "frozen",
+  "jitter", "flicker", "prompt_mismatch", "blurry",
+  "color_abnormal", "subject_lost", "firstlast_break",
+  "multishot_inconsistent", "other",
+] as const;
+
+export type RejectReason = typeof REJECT_REASONS[number];
+
+export const REJECT_REASON_LABELS: Record<RejectReason, string> = {
+  corruption: "画面崩坏",
+  deformation: "形变/扭曲",
+  blank_frame: "空白/黑帧",
+  frozen: "冻结/不动",
+  jitter: "抖动",
+  flicker: "闪烁",
+  prompt_mismatch: "与提示词不符",
+  blurry: "模糊",
+  color_abnormal: "颜色异常",
+  subject_lost: "主体丢失",
+  firstlast_break: "首尾帧断裂",
+  multishot_inconsistent: "多镜头不一致",
+  other: "其他",
+};
+
 export interface TaskResult {
   task_id: string;
   task_status: TaskStatus;
@@ -121,6 +147,8 @@ export interface PromptVersionRecord {
   video_url: string;
   task_status: string;
   created_at: string;
+  quality?: string;
+  reject_reason?: string;
 }
 
 export interface GenerationRecord {
@@ -132,6 +160,8 @@ export interface GenerationRecord {
   error_msg: string | null;
   duration_ms: number | null;
   created_at: string;
+  quality: string;
+  reject_reason: string;
 }
 
 export interface ImageRecord {

@@ -10,9 +10,15 @@ import type { KlingParams, KlingImageParams, AppSettings, ProviderId } from "@/t
 /** Resolve an image path/URL to a format usable by the API.
  *  Local /uploads/ files → base64 data URI.
  *  Remote URLs → pass through as-is.
+ *  Throws if the image cannot be resolved to usable form.
  */
 function resolveImage(db: ReturnType<typeof getDb>, image: string): string {
-  if (image.startsWith("data:")) return image; // already base64
+  if (image.startsWith("data:")) {
+    // Validate that it actually contains base64 data
+    if (image.includes("base64,")) return image;
+    // data URI without base64 encoding — still a valid image format
+    return image;
+  }
   if (image.startsWith("http://") || image.startsWith("https://")) return image;
 
   // Local uploads — try reading from DB cache first
@@ -34,12 +40,20 @@ function resolveImage(db: ReturnType<typeof getDb>, image: string): string {
         ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
       const b64 = `data:${mime};base64,${buffer.toString("base64")}`;
       console.log("[resolveImage] Disk read, base64 length:", b64.length);
-      // Cache for next time
-      db.prepare("UPDATE images SET base64_data = ? WHERE path = ?").run(b64, image);
+      // Cache for next time (upsert: update if exists, insert if not)
+      const existing = db.prepare("SELECT id FROM images WHERE path = ?").get(image) as { id: string } | undefined;
+      if (existing) {
+        db.prepare("UPDATE images SET base64_data = ? WHERE path = ?").run(b64, image);
+      } else {
+        db.prepare("INSERT INTO images (id, path, base64_data) VALUES (?, ?, ?)").run(uuidv4(), image, b64);
+      }
       return b64;
     }
 
     console.log("[resolveImage] File not found:", filepath);
+    throw new Error(
+      `图片文件不存在: ${filepath}。请重新上传图片后再试。`
+    );
   }
 
   // If it's just a bare path without /uploads/, try that too
@@ -51,10 +65,16 @@ function resolveImage(db: ReturnType<typeof getDb>, image: string): string {
       const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
       return `data:${mime};base64,${buffer.toString("base64")}`;
     }
+    throw new Error(
+      `图片文件不存在: ${filepath}。请重新上传图片后再试。`
+    );
   }
 
+  // Not a data URI, not a URL, not a local path — don't know how to handle
   console.log("[resolveImage] Unresolvable:", image.substring(0, 80));
-  return image;
+  throw new Error(
+    `无法解析图片: "${image.substring(0, 80)}"。图片必须是 base64 data URI、远程 URL 或本地 /uploads/ 路径。`
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -118,7 +138,7 @@ export async function POST(req: NextRequest) {
       // Build extra params for elements
       const extraParams: Record<string, unknown> = {};
       if (elementIds && elementIds.length > 0) {
-        extraParams.element_list = elementIds.map((eid) => ({ element_id: eid }));
+        extraParams.element_list = elementIds.map((eid) => ({ element_id: String(eid).replace(/\.0+$/, "") }));
       }
       if (image) {
         // Resolve local paths to base64; strip data URI prefix since Kling expects raw base64
@@ -126,6 +146,12 @@ export async function POST(req: NextRequest) {
         const klingImage = resolved.startsWith("data:")
           ? resolved.substring(resolved.indexOf("base64,") + "base64,".length)
           : resolved;
+        // Validate: Kling API requires valid base64 or a URL
+        if (!/^[A-Za-z0-9+/=]+$/.test(klingImage) && !klingImage.startsWith("http")) {
+          throw new Error(
+            `图片格式无效: Kling API 需要 base64 编码或远程 URL，但得到了 "${klingImage.substring(0, 80)}"`
+          );
+        }
         const imgParams: KlingImageParams = { ...params, image: klingImage, ...extraParams };
         // Handle last frame (image_tail)
         if (lastFrame) {
@@ -133,6 +159,12 @@ export async function POST(req: NextRequest) {
           imgParams.image_tail = resolvedTail.startsWith("data:")
             ? resolvedTail.substring(resolvedTail.indexOf("base64,") + "base64,".length)
             : resolvedTail;
+          // Validate tail image too
+          if (imgParams.image_tail && !/^[A-Za-z0-9+/=]+$/.test(imgParams.image_tail) && !imgParams.image_tail.startsWith("http")) {
+            throw new Error(
+              `尾帧图片格式无效: Kling API 需要 base64 编码或远程 URL，但得到了 "${imgParams.image_tail.substring(0, 80)}"`
+            );
+          }
         }
         taskId = await submitImage2Video(token, imgParams);
       } else {
