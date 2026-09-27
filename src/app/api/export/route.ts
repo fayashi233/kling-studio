@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 import { getDb } from "@/lib/db";
-import { createZip, type ZipEntry } from "@/lib/zip";
+import { createZipToFile, type ZipEntry } from "@/lib/zip";
 import { createSimpleXlsx } from "@/lib/xlsx";
 import { v4 as uuidv4 } from "uuid";
 import { buildVideoInfoText } from "@/lib/videoInfo";
@@ -56,10 +56,11 @@ const EXPORT_ORDER_SQL = `
     COALESCE(g.export_scene_type, '') as export_scene_type,
     COALESCE(g.export_case_type, '') as export_case_type,
     COALESCE(g.video_code, '') as video_code,
-    p.reference_image,
-    p.last_frame_image
+    pv.reference_image,
+    pv.last_frame_image
   FROM generations g
   JOIN prompts p ON p.id = g.prompt_id
+  JOIN prompt_versions pv ON pv.task_id = g.task_id
   ORDER BY
     CASE WHEN p.group_name IS NULL OR p.group_name = '' THEN '未分组' ELSE p.group_name END ASC,
     g.created_at DESC
@@ -159,15 +160,15 @@ function backfillMissingCodes(db: ReturnType<typeof getDb>) {
 function buildQuery(scope: string, groupName: string, taskIds: string[]) {
   const base = `
     SELECT
-      p.prompt,
-      p.negative_prompt,
-      p.model_name,
-      p.mode,
-      p.duration,
-      p.aspect_ratio,
-      p.cfg_scale,
-      p.reference_image,
-      p.last_frame_image,
+      pv.prompt,
+      pv.negative_prompt,
+      pv.model_name,
+      pv.mode,
+      pv.duration,
+      pv.aspect_ratio,
+      pv.cfg_scale,
+      pv.reference_image,
+      pv.last_frame_image,
       g.task_id,
       g.task_status,
       g.video_url,
@@ -186,6 +187,7 @@ function buildQuery(scope: string, groupName: string, taskIds: string[]) {
       COALESCE(g.issue_description, '') as issue_description
     FROM generations g
     JOIN prompts p ON p.id = g.prompt_id
+    JOIN prompt_versions pv ON pv.task_id = g.task_id
   `;
 
   if (scope === "selected_task_ids" && taskIds.length > 0) {
@@ -232,6 +234,12 @@ export async function POST(req: NextRequest) {
     const query = buildQuery(scope, groupName, taskIds);
     const rows = db.prepare(query.sql).all(...query.params) as ExportRow[];
 
+    // Build output path: output/kling_export_2026-07-03_14-30-00.zip
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
+    const outputDir = path.join(process.cwd(), "output");
+    const outputPath = path.join(outputDir, `kling_export_${ts}.zip`);
+
     const sheetRows = [
       HEADERS,
       ...rows.map((row) => [
@@ -275,7 +283,8 @@ export async function POST(req: NextRequest) {
       const videoPath = `${view}/${scene}/${type}/${code}${videoExtension(row.video_url)}`;
       entries.push({
         path: videoPath,
-        data: fs.readFileSync(source),
+        data: Buffer.alloc(0),
+        sourceFile: source,
       });
       entries.push({
         path: `${view}/${scene}/${type}/${code}.txt`,
@@ -331,15 +340,20 @@ export async function POST(req: NextRequest) {
       }, null, 2),
     });
 
-    const zip = createZip(entries);
-    const filename = `kling_export_${new Date().toISOString().slice(0, 10)}.zip`;
-    return new NextResponse(new Uint8Array(zip), {
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-        "X-Export-Rows": String(rows.length),
-        "X-Export-Skipped": encodeURIComponent(JSON.stringify(skipped)),
-      },
+    const zip = createZipToFile(
+      entries,
+      outputPath
+    );
+
+    const filename = path.basename(outputPath);
+    return NextResponse.json({
+      ok: true,
+      filePath: outputPath,
+      filename,
+      fileSize: zip.fileSize,
+      exportedCount: exportedTaskIds.length,
+      skipped: skipped.length > 0 ? skipped : undefined,
+      imageSkipped: imageSkipped.length > 0 ? imageSkipped : undefined,
     });
   } catch (err: unknown) {
     return NextResponse.json(

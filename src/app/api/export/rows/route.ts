@@ -43,12 +43,13 @@ const EXPORT_ROWS_SQL = `
       g.exported_at,
       g.export_batch_id,
       g.created_at,
-      p.prompt,
+      pv.prompt,
       p.group_name,
-      p.reference_image,
-      p.last_frame_image
+      pv.reference_image,
+      pv.last_frame_image
     FROM generations g
     JOIN prompts p ON p.id = g.prompt_id
+    JOIN prompt_versions pv ON pv.task_id = g.task_id
     ORDER BY
       CASE WHEN p.group_name IS NULL OR p.group_name = '' THEN '未分组' ELSE p.group_name END ASC,
       g.created_at DESC

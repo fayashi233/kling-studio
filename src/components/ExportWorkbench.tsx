@@ -74,25 +74,24 @@ function uniq(values: string[]) {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
 }
 
-async function downloadZip(taskIds?: string[]) {
+async function exportToFile(taskIds?: string[]) {
   const res = await fetch("/api/export", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(taskIds ? { taskIds } : {}),
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
+  const data = await res.json();
+  if (!res.ok || data.error) {
     throw new Error(data.error || "导出失败");
   }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `kling_export_${new Date().toISOString().slice(0, 10)}.zip`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  return data as {
+    ok: true;
+    filePath: string;
+    filename: string;
+    fileSize: number;
+    exportedCount: number;
+    skipped?: Array<{ taskId: string; reason: string }>;
+  };
 }
 
 export function ExportWorkbench({
@@ -308,9 +307,10 @@ export function ExportWorkbench({
       if (dirty.size > 0) await flushSave();
       const taskIds = rows.filter((row) => !!row.export_selected).map((row) => row.task_id);
       if (taskIds.length === 0) throw new Error("请先勾选要导出的行");
-      await downloadZip(taskIds);
+      const result = await exportToFile(taskIds);
       await onRefresh();
-      setMessage(`已导出 ${taskIds.length} 条勾选记录`);
+      const sizeMB = (result.fileSize / 1024 / 1024).toFixed(1);
+      setMessage(`已导出 ${result.exportedCount} 条 → output/${result.filename} (${sizeMB} MB)`);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "导出失败");
     } finally {

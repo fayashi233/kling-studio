@@ -58,6 +58,7 @@ next-env.d.ts
 /data/
 /public/uploads/
 /public/videos/
+/output/
 
 # AI tools (allow shared hooks config)
 .claude/
